@@ -10,6 +10,7 @@ from ibllib.pipes.ephys_preprocessing import (
     EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress,
     EphysCellsQc, EphysDLC, SpikeSorting)
 
+
 LASER_PULSE_DURATION_SECS = .5
 LASER_PROBABILITY = .8
 DISPLAY = False
@@ -86,3 +87,6 @@ class EphysPassiveOptoPipeline(tasks.Pipeline):
         tasks["EphysCellsQc"] = EphysCellsQc(self.session_path, parents=[tasks["SpikeSorting"]])
         tasks["EphysDLC"] = EphysDLC(self.session_path, parents=[tasks["EphysVideoCompress"]])
         self.tasks = tasks
+
+
+__pipeline__ = EphysPassiveOptoPipeline
