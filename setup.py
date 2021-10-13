@@ -24,7 +24,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='project_extraction',
-    version='0.0.0',
+    version='0.0.1',
     python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
     description='Custom extractors for satellite tasks',
     license="MIT",
