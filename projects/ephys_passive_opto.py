@@ -27,6 +27,7 @@ class EphysPassiveOptoTrials(tasks.Task):
 
     def _run(self):
         sync, sync_map = ephys_fpga.get_main_probe_sync(self.session_path)
+        ephys_fpga.extract_wheel_sync()
         bpod = ephys_fpga.get_sync_fronts(sync, sync_map['bpod'])
         laser_ttl = ephys_fpga.get_sync_fronts(sync, sync_map['laser_ttl'])
         t_bpod = bpod['times'][bpod['polarities'] == 1]
