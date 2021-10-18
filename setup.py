@@ -10,7 +10,7 @@ if CURRENT_PYTHON < REQUIRED_PYTHON:
     sys.stderr.write("""
 ==========================
 Unsupported Python version
-==========================
+==========================  
 This version of IBL project_extraction requires Python {}.{}, but you're trying to
 install it on Python {}.{}.
 """.format(*(REQUIRED_PYTHON + CURRENT_PYTHON)))
@@ -24,7 +24,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='project_extraction',
-    version='0.0.1',
+    version='0.0.2',
     python_requires='>={}.{}'.format(*REQUIRED_PYTHON),
     description='Custom extractors for satellite tasks',
     license="MIT",

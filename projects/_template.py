@@ -8,8 +8,8 @@ class TemplateTask(tasks.Task):
     io_charge = 90
     level = 1
     signature = [
-        ('_ibl_trials.laser_intervals.npy', 'alf', True),
-        ('_ibl_trials.laser_probability.npy', 'alf', True),
+        ('_ibl_trials.laserIntervals.npy', 'alf', True),
+        ('_ibl_trials.laserProbability.npy', 'alf', True),
         ('_ibl_trials.intervals.npy', 'alf', True)]
 
     def _run(self):
