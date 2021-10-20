@@ -18,8 +18,7 @@ def get_pipeline(task_type) -> tasks.Pipeline:
         task_type = get_task_extractor_type(task_type)
     try:
         mdl = importlib.import_module(f"projects.{task_type}")
-    except:
-        ModuleNotFoundError()
+    except ModuleNotFoundError:
         _logger.error({f"Import error: projects.{task_type} not found: does this project exists ?"})
         return
     return mdl.__pipeline__
