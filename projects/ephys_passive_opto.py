@@ -9,7 +9,7 @@ from ibllib.plots import squares, vertical_lines
 from ibllib.pipes import tasks
 
 from ibllib.pipes.ephys_preprocessing import (
-    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress,
+    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress, EphysVideoSyncQc,
     EphysCellsQc, EphysDLC, SpikeSorting)
 
 
@@ -96,13 +96,14 @@ class EphysPassiveOptoPipeline(tasks.Pipeline):
         tasks["EphysRawQC"] = RawEphysQC(self.session_path)
         tasks["EphysAudio"] = EphysAudio(self.session_path)
         tasks["EphysMtscomp"] = EphysMtscomp(self.session_path)
+        tasks['EphysVideoCompress'] = EphysVideoCompress(self.session_path)
         # level 1
         tasks["SpikeSorting"] = SpikeSorting(
             self.session_path, parents=[tasks["EphysMtscomp"], tasks["EphysPulses"]])
         tasks["EphysPassiveOptoTrials"] = EphysPassiveOptoTrials(self.session_path, parents=[tasks["EphysPulses"]])
-        tasks["EphysVideoCompress"] = EphysVideoCompress(
-            self.session_path, parents=[tasks["EphysPulses"]])
         # level 2
+        tasks["EphysVideoSyncQc"] = EphysVideoSyncQc(
+            self.session_path, parents=[tasks["EphysVideoCompress"], tasks["EphysPulses"], tasks["EphysPassiveOptoTrials"]])
         tasks["EphysCellsQc"] = EphysCellsQc(self.session_path, parents=[tasks["SpikeSorting"]])
         tasks["EphysDLC"] = EphysDLC(self.session_path, parents=[tasks["EphysVideoCompress"]])
         self.tasks = tasks
