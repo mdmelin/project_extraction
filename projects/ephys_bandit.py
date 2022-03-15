@@ -12,6 +12,8 @@ from ibllib.pipes.ephys_preprocessing import (
 import ibllib.io.extractors.base
 import ibllib.io.raw_data_loaders as rawio
 from ibllib.qc.task_extractors import TaskQCExtractor
+from ibllib.io.extractors.ephys_fpga import FpgaTrials
+from project_extraction.projects.training_bandit import extract_all as training_extract_all
 
 _logger = logging.getLogger('ibllib')
 
@@ -47,178 +49,62 @@ class EphysBanditTrials(tasks.Task):
         # trials, wheel, output_files = bpod_trials.extract_all(self.session_path, save=True)
 
 
+
+
+
 class EphysBanditQC(TaskQCExtractor):
     # TODO
 
 
+class BanditFpgaTrials(FpgaTrials):
+    save_names = ('_ibl_trials.intervals_bpod.npy',
+                  '_ibl_trials.goCueTrigger_times.npy', None, None, None, None, None, None, None,
+                  '_ibl_trials.stimOff_times.npy', None,
+                  '_ibl_wheel.timestamps.npy',
+                  '_ibl_wheel.position.npy', '_ibl_wheelMoves.intervals.npy',
+                  '_ibl_wheelMoves.peakAmplitude.npy', '_ibl_trials.table.pqt', '_ibl_trials.probabilityRewardLeft',
+                  '_ibl_trials.laserStimulation.npy')
+    var_names = ('intervals_bpod',
+                 'goCueTrigger_times', 'stimOnTrigger_times',
+                 'stimOffTrigger_times', 'stimFreezeTrigger_times', 'errorCueTrigger_times',
+                 'errorCue_times', 'itiIn_times',
+                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'probabilityRewardLeft', 'laserStimulation'
+                 'wheel_timestamps', 'wheel_position',
+                 'wheelMoves_intervals', 'wheelMoves_peakAmplitude')
+
+    # Fields from bpod extractor that we want to resync to FPGA
+    bpod_rsync_fields = ['intervals', 'response_times', 'goCueTrigger_times',
+                         'stimOnTrigger_times', 'stimOffTrigger_times',
+                         'stimFreezeTrigger_times', 'errorCueTrigger_times']
+
+    # Fields from bpod extractor that we want to save
+    bpod_fields = ['feedbackType', 'choice', 'rewardVolume', 'contrastLeft', 'contrastRight', 'probabilityLeft', 'intervals_bpod',
+                   'laserStimulation', 'probabilityRewardLeft']
+
+    def _extract_bpod(self, bpod_trials, save=False):
+        bpod_trials, _ = training_extract_all(self.session_path, save=save, bpod_trials=bpod_trials)
+        return bpod_trials
 
 
-def extract_all(session_path, save=True, bpod_trials=None, settings=None):
-    """Extract trials and wheel data.
-
-    For task versions >= 5.0.0, outputs wheel data and trials.table dataset (+ some extra datasets)
-
-    Parameters
-    ----------
-    session_path : str, pathlib.Path
-        The path to the session
-    save : bool
-        If true save the data files to ALF
-    bpod_trials : list of dicts
-        The Bpod trial dicts loaded from the _iblrig_taskData.raw dataset
-    settings : dict
-        The Bpod settings loaded from the _iblrig_taskSettings.raw dataset
-
-    Returns
-    -------
-    A list of extracted data and a list of file paths if save is True (otherwise None)
+def extract_all(session_path, save=True, bin_exists=False):
     """
-
-    extractor_type = ibllib.io.extractors.base.get_session_extractor_type(session_path)
+    For the IBL ephys task, reads ephys binary file and extract:
+        -   sync
+        -   wheel
+        -   behaviour
+        -   video time stamps
+    :param session_path: '/path/to/subject/yyyy-mm-dd/001'
+    :param save: Bool, defaults to False
+    :return: outputs, files
+    """
+    extractor_type = extractors_base.get_session_extractor_type(session_path)
     _logger.info(f"Extracting {session_path} as {extractor_type}")
-    bpod_trials = bpod_trials or rawio.load_data(session_path)
-    settings = settings or rawio.load_settings(session_path)
-    _logger.info(f'{extractor_type} session on {settings["PYBPOD_BOARD"]}')
-
-    if settings is None or settings['IBLRIG_VERSION_TAG'] == '':
-        settings = {'IBLRIG_VERSION_TAG': '100.0.0'}
-
-    base = [tt.RepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
-            tt.StimFreezeTriggerTimes, tt.ErrorCueTriggerTimes, LaserStimulation, ProbabilityRewardLeft, BanditTrialsTable]
-
-    trials, files_trials = run_extractor_classes(
-        base, save=save, session_path=session_path, bpod_trials=bpod_trials, settings=settings)
-
-    files_wheel = []
-    wheel = OrderedDict({k: trials.pop(k) for k in tuple(trials.keys()) if 'wheel' in k})
-
-    _logger.info('session extracted \n')  # timing info in log
-
-    return trials, wheel, (files_trials + files_wheel) if save else None
+    sync, chmap = get_main_probe_sync(session_path, bin_exists=bin_exists)
+    outputs, files = extractors_base.run_extractor_classes(
+        BanditFpgaTrials, session_path=session_path, save=save, sync=sync, chmap=chmap)
+    return outputs, files
 
 
-class BanditTrialsTable(tt.TrialsTable):
-    """
-    Extracts the following into a table from Bpod raw data:
-        intervals, goCue_times, response_times, choice, stimOn_times, contrastLeft, contrastRight,
-        feedback_times, feedbackType, rewardVolume, probabilityLeft, firstMovement_times
-    Additionally extracts the following wheel data:
-        wheel_timestamps, wheel_position, wheel_moves_intervals, wheel_moves_peak_amplitude
-    """
-
-    def _extract(self, **kwargs):
-        base = [tt.Intervals, tt.GoCueTimes, tt.ResponseTimes, BanditChoice, tt.StimOnOffFreezeTimes, BanditContrastLR,
-                tt.FeedbackTimes, tt.FeedbackType, BanditRewardVolume, BanditProbabilityLeft, tt.Wheel]
-        exclude = [
-            'stimOff_times', 'stimFreeze_times', 'wheel_timestamps', 'wheel_position',
-            'wheel_moves_intervals', 'wheel_moves_peak_amplitude', 'peakVelocity_times', 'is_final_movement'
-        ]
-
-        out, _ = run_extractor_classes(base, session_path=self.session_path, bpod_trials=self.bpod_trials, settings=self.settings,
-                                       save=False)
-        table = AlfBunch({k: v for k, v in out.items() if k not in exclude})
-        assert len(table.keys()) == 12
-
-        return table.to_df(), *(out.pop(x) for x in self.var_names if x != 'table')
-
-
-class BanditRewardVolume(tt.RewardVolume):
-    """
-    Load reward volume delivered for each trial. For trials where the reward was given by laser stimulation
-    rather than water stimulation set reward volume to 0
-    """
-
-    def _extract(self):
-        rewards = super()
-        laser = np.array([t['opto_block'] for t in self.bpod_trials]).astype(bool)
-        rewards[laser] = 0
-
-        return rewards
-
-
-class LaserStimulation(BaseBpodTrialsExtractor):
-    """
-    Get the trials where laser reward stimulation was given. Laser stimulation given when task was in laser block and feedback
-    is correct
-    """
-
-    save_names = '_ibl_trials.laserStimulation.npy'
-    var_names = 'laserStimulation'
-
-    def _extract(self):
-        reward = np.array([~np.isnan(t['behavior_data']['States timestamps']['reward'][0][0]) for t in
-                           self.bpod_trials]).astype(bool)
-        laser = np.array([t['opto_block'] for t in self.bpod_trials]).astype(int)
-        laser[~reward] = 0
-        return laser
-
-
-class BanditChoice(tt.Choice):
-    """
-    Get the subject's choice in every trial.
-    **Optional:** saves _ibl_trials.choice.npy to alf folder.
-
-    Extracts choice from side on which first rotary encoder threhsold was detected
-    -1 is a CCW turn (towards the left) this is stored in 'RotaryEncoder1_1'
-    +1 is a CW turn (towards the right) this is stored in 'RotaryEncoder1_2'
-    0 is a no_go trial
-
-    """
-
-    def _extract(self):
-        return np.array([self._extract_choice(t).astype(int) for t in self.bpod_trials])
-
-    def _extract_choice(self, data):
-        if (('RotaryEncoder1_2' in data['behavior_data']['Events timestamps']) &
-                ('RotaryEncoder1_1' in data['behavior_data']['Events timestamps'])):
-            # When both thresholds are passed, take the first crossed threshold to be the choice direction
-            choice = -1 if (data['behavior_data']['Events timestamps']['RotaryEncoder1_2'][0] >
-                            data['behavior_data']['Events timestamps']['RotaryEncoder1_1'][0]) else 1
-        elif 'RotaryEncoder1_1' in data['behavior_data']['Events timestamps']: # this should be CCW
-            choice = -1
-        elif 'RotaryEncoder1_2' in data['behavior_data']['Events timestamps']: # this should be CW
-            choice = 1
-        else:
-            choice = 0
-
-        return choice
-
-
-class ProbabilityRewardLeft(BaseBpodTrialsExtractor):
-    """
-    Probability of reward being given on left movement of wheel
-    """
-    save_names = '_ibl_trials.probabilityRewardLeft.npy'
-    var_names = 'probabilityRewardLeft'
-
-    def _extract(self, **kwargs):
-        return np.array([t['stim_probability_left'] for t in self.bpod_trials])
-
-
-class BanditProbabilityLeft(tt.ProbabilityLeft):
-    """
-    No visual stimulus related events so probability left is nan for all trials
-    """
-    save_names = '_ibl_trials.probabilityLeft.npy'
-    var_names = 'probabilityLeft'
-
-    def _extract(self, **kwargs):
-        return  np.ones(len(self.bpod_trials)) * np.nan
-
-
-class BanditContrastLR(tt.ContrastLR):
-    """
-    Get left and right contrasts from raw datafile. Optionally, saves
-    _ibl_trials.contrastLeft.npy and _ibl_trials.contrastRight.npy to alf folder.
-
-    Uses signed_contrast to create left and right contrast vectors.
-    """
-
-    def _extract(self):
-        contrastLeft = np.array([t['contrast']['value'] for t in self.bpod_trials])
-        contrastRight = np.array([t['contrast']['value'] for t in self.bpod_trials])
-
-        return contrastLeft, contrastRight
 
 
 class EphysBanditPipeline(tasks.Pipeline):
@@ -246,3 +132,7 @@ class EphysBanditPipeline(tasks.Pipeline):
         self.tasks = tasks
 
 __pipeline__ = EphysBanditPipeline
+
+
+#check_stimOn_goCue_delays
+#check_response_feedback_delays
