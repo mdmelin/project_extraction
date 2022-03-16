@@ -82,7 +82,7 @@ class BanditFpgaTrials(FpgaTrials):
 
     # Fields from bpod extractor that we want to save
     bpod_fields = ['feedbackType', 'choice', 'rewardVolume', 'contrastLeft', 'contrastRight', 'probabilityLeft',
-                   'intervals_bpod', 'probabilityRewardLeft', 'laserStimulation']
+                   'intervals_bpod', 'probabilityRewardLeft', 'laserStimulation', 'laserProbability']
 
     def _extract_bpod(self, bpod_trials, save=False):
         bpod_trials, _, _ = _extract_all(self.session_path, save=save, bpod_trials=bpod_trials)
