@@ -5,16 +5,43 @@ from one.alf.io import AlfBunch
 
 from ibllib.pipes import tasks
 import ibllib.io.extractors.training_trials as tt
+import ibllib.pipes.training_preprocessing as training_tasks
 from ibllib.io.extractors.base import BaseBpodTrialsExtractor, run_extractor_classes
-from ibllib.pipes.ephys_preprocessing import (
-    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress, EphysVideoSyncQc,
-    EphysCellsQc, EphysDLC, SpikeSorting)
 import ibllib.io.extractors.base
 import ibllib.io.raw_data_loaders as rawio
 
 
 _logger = logging.getLogger('ibllib')
 
+
+class TrainingBanditTrials(tasks.Task):
+    priority = 90
+    level = 0
+    force = False
+    signature = {
+        'input_files': [('_iblrig_taskData.raw.*', 'raw_behavior_data', True),
+                        ('_iblrig_taskSettings.raw.*', 'raw_behavior_data', True),
+                        ('_iblrig_encoderEvents.raw*', 'raw_behavior_data', True),
+                        ('_iblrig_encoderPositions.raw*', 'raw_behavior_data', True)],
+        'output_files': [('*trials.goCueTrigger_times.npy', 'alf', True),
+                         ('*trials.itiDuration.npy', 'alf', False),
+                         ('*trials.probabilityRewardLeft', 'alf', True),
+                         ('*trials.table.pqt', 'alf', True),
+                         ('*wheel.position.npy', 'alf', True),
+                         ('*wheel.timestamps.npy', 'alf', True),
+                         ('*wheelMoves.intervals.npy', 'alf', True),
+                         ('*wheelMoves.peakAmplitude.npy', 'alf', True)]
+    }
+
+    def _run(self):
+        """
+        Extracts an iblrig training session
+        """
+        trials, wheel, output_files = extract_all(self.session_path, save=True)
+        if trials is None:
+            return None
+
+        return output_files
 
 
 def extract_all(session_path, save=True, bpod_trials=None, settings=None):
@@ -48,8 +75,8 @@ def extract_all(session_path, save=True, bpod_trials=None, settings=None):
         settings = {'IBLRIG_VERSION_TAG': '100.0.0'}
 
     # check that the extraction works for both the shaping 0-100 and the other one
-    base = [tt.RepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
-            tt.StimFreezeTriggerTimes, tt.ErrorCueTriggerTimes, LaserStimulation, ProbabilityRewardLeft, BanditTrialsTable]
+    base = [BanditRepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
+            tt.StimFreezeTriggerTimes, tt.ErrorCueTriggerTimes, ProbabilityRewardLeft, BanditTrialsTable]
 
     trials, files_trials = run_extractor_classes(
         base, save=save, session_path=session_path, bpod_trials=bpod_trials, settings=settings)
@@ -73,7 +100,7 @@ class BanditTrialsTable(tt.TrialsTable):
 
     def _extract(self, **kwargs):
         base = [tt.Intervals, tt.GoCueTimes, tt.ResponseTimes, BanditChoice, tt.StimOnOffFreezeTimes, BanditContrastLR,
-                tt.FeedbackTimes, tt.FeedbackType, BanditRewardVolume, BanditProbabilityLeft, tt.Wheel]
+                tt.FeedbackTimes, tt.FeedbackType, tt.RewardVolume, BanditProbabilityLeft, tt.Wheel]
         exclude = [
             'stimOff_times', 'stimFreeze_times', 'wheel_timestamps', 'wheel_position',
             'wheel_moves_intervals', 'wheel_moves_peak_amplitude', 'peakVelocity_times', 'is_final_movement'
@@ -87,35 +114,12 @@ class BanditTrialsTable(tt.TrialsTable):
         return table.to_df(), *(out.pop(x) for x in self.var_names if x != 'table')
 
 
-class BanditRewardVolume(tt.RewardVolume):
-    """
-    Load reward volume delivered for each trial. For trials where the reward was given by laser stimulation
-    rather than water stimulation set reward volume to 0
-    """
+class BanditRepNum(tt.RepNum):
 
     def _extract(self):
-        rewards = super()
-        laser = np.array([t['opto_block'] for t in self.bpod_trials]).astype(bool)
-        rewards[laser] = 0
+        repnum = np.ones(len(self.bpod_trials))
 
-        return rewards
-
-
-class LaserStimulation(BaseBpodTrialsExtractor):
-    """
-    Get the trials where laser reward stimulation was given. Laser stimulation given when task was in laser block and feedback
-    is correct
-    """
-
-    save_names = '_ibl_trials.laserStimulation.npy'
-    var_names = 'laserStimulation'
-
-    def _extract(self):
-        reward = np.array([~np.isnan(t['behavior_data']['States timestamps']['reward'][0][0]) for t in
-                           self.bpod_trials]).astype(bool)
-        laser = np.array([t['opto_block'] for t in self.bpod_trials]).astype(int)
-        laser[~reward] = 0
-        return laser
+        return repnum
 
 
 class BanditChoice(tt.Choice):
@@ -131,7 +135,7 @@ class BanditChoice(tt.Choice):
     """
 
     def _extract(self):
-        return np.array([self._extract_choice(t).astype(int) for t in self.bpod_trials])
+        return np.array([self._extract_choice(t) for t in self.bpod_trials]).astype(int)
 
     def _extract_choice(self, data):
         if (('RotaryEncoder1_2' in data['behavior_data']['Events timestamps']) &
@@ -168,7 +172,7 @@ class BanditProbabilityLeft(tt.ProbabilityLeft):
     var_names = 'probabilityLeft'
 
     def _extract(self, **kwargs):
-        return  np.ones(len(self.bpod_trials)) * np.nan
+        return np.ones(len(self.bpod_trials)) * np.nan
 
 
 class BanditContrastLR(tt.ContrastLR):
@@ -180,10 +184,26 @@ class BanditContrastLR(tt.ContrastLR):
     """
 
     def _extract(self):
-        contrastLeft = np.array([t['contrast']['value'] for t in self.bpod_trials])
-        contrastRight = np.array([t['contrast']['value'] for t in self.bpod_trials])
+        contrastLeft = np.array([t['contrast'] for t in self.bpod_trials])
+        contrastRight = np.array([t['contrast'] for t in self.bpod_trials])
 
         return contrastLeft, contrastRight
 
 
 
+class TrainingBanditPipeline(tasks.Pipeline):
+    label = __name__
+
+    def __init__(self, session_path, **kwargs):
+        super(TrainingBanditPipeline, self).__init__(session_path, **kwargs)
+        tasks = OrderedDict()
+        self.session_path = session_path
+        # level 0
+        tasks['TrainingRegisterRaw'] = training_tasks.TrainingRegisterRaw(self.session_path)
+        tasks['TrainingBanditTrials'] = TrainingBanditTrials(self.session_path)
+        tasks['TrainingVideoCompress'] = training_tasks.TrainingVideoCompress(self.session_path)
+        tasks['TrainingAudio'] = training_tasks.TrainingAudio(self.session_path)
+        # level 1
+        tasks['TrainingDLC'] = training_tasks.TrainingDLC(
+            self.session_path, parents=[tasks['TrainingVideoCompress']])
+        self.tasks = tasks
