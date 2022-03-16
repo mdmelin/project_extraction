@@ -157,7 +157,7 @@ class ProbabilityRewardLeft(BaseBpodTrialsExtractor):
     """
     Probability of reward being given on left movement of wheel
     """
-    save_names = '_ibl_trials.probabilityRewardLeft.npy'
+    save_names = '_av_trials.probabilityRewardLeft.npy'
     var_names = 'probabilityRewardLeft'
 
     def _extract(self, **kwargs):
@@ -168,8 +168,6 @@ class BanditProbabilityLeft(tt.ProbabilityLeft):
     """
     No visual stimulus related events so probability left is nan for all trials
     """
-    save_names = '_ibl_trials.probabilityLeft.npy'
-    var_names = 'probabilityLeft'
 
     def _extract(self, **kwargs):
         return np.ones(len(self.bpod_trials)) * np.nan
