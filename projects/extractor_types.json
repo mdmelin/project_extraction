@@ -1,0 +1,4 @@
+{"_bandit_laser_blocks_ephysChoiceWorld": "ephys_bandit",
+ "_bandit_biasedChoiceWorld": "training_bandit",
+ "_bandit_100_0_biasedChoiceWorld6.4.2": "training_bandit"
+}
