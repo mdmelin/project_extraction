@@ -4,12 +4,11 @@ import numpy as np
 
 from ibllib.pipes import tasks
 import ibllib.io.extractors.training_trials as tt
-import project_extraction.projects.training_bandit as bt
+import projects.training_bandit as bt
 from ibllib.io.extractors.base import run_extractor_classes
 from ibllib.io.extractors.base import get_session_extractor_type
 import ibllib.pipes.ephys_preprocessing as ephys_tasks
 from ibllib.io.extractors.ephys_fpga import FpgaTrials
-from project_extraction.projects.training_bandit import extract_all as training_extract_all
 from ibllib.io.extractors.ephys_fpga import get_main_probe_sync
 from ibllib.io.extractors.base import BaseBpodTrialsExtractor
 
