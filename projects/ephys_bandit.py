@@ -60,15 +60,16 @@ class EphysBanditTrials(tasks.Task):
 class BanditFpgaTrials(FpgaTrials):
     save_names = ('_ibl_trials.intervals_bpod.npy',
                   '_ibl_trials.goCueTrigger_times.npy', None, None, None, None, None, None, None,
-                  '_ibl_trials.stimOff_times.npy', None, '_ibl_trials.table.pqt',
-                  '_ibl_trials.probabilityRewardLeft', '_ibl_trials.laserStimulation.npy'
-                  '_ibl_wheel.timestamps.npy', '_ibl_wheel.position.npy',
-                  '_ibl_wheelMoves.intervals.npy', '_ibl_wheelMoves.peakAmplitude.npy')
+                  '_ibl_trials.stimOff_times.npy', None,
+                  '_ibl_trials.table.pqt', '_ibl_trials.laserStimulation.npy', '_ibl_trials.probabilityRewardLeft.npy',
+                  '_ibl_wheel.timestamps.npy',
+                  '_ibl_wheel.position.npy', '_ibl_wheelMoves.intervals.npy',
+                  '_ibl_wheelMoves.peakAmplitude.npy')
     var_names = ('intervals_bpod',
                  'goCueTrigger_times', 'stimOnTrigger_times',
                  'stimOffTrigger_times', 'stimFreezeTrigger_times', 'errorCueTrigger_times',
                  'errorCue_times', 'itiIn_times',
-                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'probabilityRewardLeft', 'laserStimulation',
+                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'laserStimulation', 'probabilityRewardLeft',
                  'wheel_timestamps', 'wheel_position',
                  'wheelMoves_intervals', 'wheelMoves_peakAmplitude')
 
