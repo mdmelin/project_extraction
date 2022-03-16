@@ -122,7 +122,7 @@ def _extract_all(session_path, save=True, bpod_trials=None, settings=None):
     # check that the extraction works for both the shaping 0-100 and the other one
     base = [bt.BanditRepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
             tt.StimFreezeTriggerTimes, tt.ErrorCueTriggerTimes, bt.ProbabilityRewardLeft, BanditLaserStimulation,
-            EphysBanditTrialsTable]
+            BanditLaserProbability, EphysBanditTrialsTable]
 
     trials, files_trials = run_extractor_classes(
         base, save=save, session_path=session_path, bpod_trials=bpod_trials, settings=settings)
