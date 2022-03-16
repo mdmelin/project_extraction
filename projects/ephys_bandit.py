@@ -82,7 +82,7 @@ class BanditFpgaTrials(FpgaTrials):
                    'intervals_bpod', 'probabilityRewardLeft', 'laserStimulation']
 
     def _extract_bpod(self, bpod_trials, save=False):
-        bpod_trials, _ = _extract_all(self.session_path, save=save, bpod_trials=bpod_trials)
+        bpod_trials, _, _ = _extract_all(self.session_path, save=save, bpod_trials=bpod_trials)
         return bpod_trials
 
 
