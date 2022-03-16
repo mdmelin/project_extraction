@@ -68,7 +68,7 @@ class BanditFpgaTrials(FpgaTrials):
                  'goCueTrigger_times', 'stimOnTrigger_times',
                  'stimOffTrigger_times', 'stimFreezeTrigger_times', 'errorCueTrigger_times',
                  'errorCue_times', 'itiIn_times',
-                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'probabilityRewardLeft', 'laserStimulation'
+                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'probabilityRewardLeft', 'laserStimulation',
                  'wheel_timestamps', 'wheel_position',
                  'wheelMoves_intervals', 'wheelMoves_peakAmplitude')
 
