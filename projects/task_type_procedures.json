@@ -1,1 +1,3 @@
-{}
+{"training_bandit":  "Behavior training/tasks",
+  "ephys_bandit": "Ephys recording with acute probe(s)"
+}
