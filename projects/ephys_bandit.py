@@ -60,15 +60,18 @@ class EphysBanditTrials(tasks.Task):
 class BanditFpgaTrials(FpgaTrials):
     save_names = ('_ibl_trials.intervals_bpod.npy',
                   '_ibl_trials.goCueTrigger_times.npy', None, None, None, None, None, None, None,
-                  '_ibl_trials.stimOff_times.npy', None, '_ibl_trials.table.pqt',
-                  '_ibl_trials.probabilityRewardLeft', '_ibl_trials.laserStimulation.npy'
-                  '_ibl_wheel.timestamps.npy', '_ibl_wheel.position.npy',
-                  '_ibl_wheelMoves.intervals.npy', '_ibl_wheelMoves.peakAmplitude.npy')
+                  '_ibl_trials.stimOff_times.npy', None,
+                  '_ibl_trials.table.pqt', '_ibl_trials.laserStimulation.npy', '_av_trials.probabilityRewardLeft.npy',
+                  '_av_trials.laserProbability.npy',
+                  '_ibl_wheel.timestamps.npy',
+                  '_ibl_wheel.position.npy', '_ibl_wheelMoves.intervals.npy',
+                  '_ibl_wheelMoves.peakAmplitude.npy')
     var_names = ('intervals_bpod',
                  'goCueTrigger_times', 'stimOnTrigger_times',
                  'stimOffTrigger_times', 'stimFreezeTrigger_times', 'errorCueTrigger_times',
                  'errorCue_times', 'itiIn_times',
-                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'probabilityRewardLeft', 'laserStimulation'
+                 'stimFreeze_times', 'stimOff_times', 'valveOpen_times', 'table', 'laserStimulation', 'probabilityRewardLeft',
+                 'laserProbability',
                  'wheel_timestamps', 'wheel_position',
                  'wheelMoves_intervals', 'wheelMoves_peakAmplitude')
 
@@ -79,7 +82,7 @@ class BanditFpgaTrials(FpgaTrials):
 
     # Fields from bpod extractor that we want to save
     bpod_fields = ['feedbackType', 'choice', 'rewardVolume', 'contrastLeft', 'contrastRight', 'probabilityLeft',
-                   'intervals_bpod', 'probabilityRewardLeft', 'laserStimulation']
+                   'intervals_bpod', 'probabilityRewardLeft', 'laserStimulation', 'laserProbability']
 
     def _extract_bpod(self, bpod_trials, save=False):
         bpod_trials, _, _ = _extract_all(self.session_path, save=save, bpod_trials=bpod_trials)
@@ -119,7 +122,7 @@ def _extract_all(session_path, save=True, bpod_trials=None, settings=None):
     # check that the extraction works for both the shaping 0-100 and the other one
     base = [bt.BanditRepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
             tt.StimFreezeTriggerTimes, tt.ErrorCueTriggerTimes, bt.ProbabilityRewardLeft, BanditLaserStimulation,
-            EphysBanditTrialsTable]
+            BanditLaserProbability, EphysBanditTrialsTable]
 
     trials, files_trials = run_extractor_classes(
         base, save=save, session_path=session_path, bpod_trials=bpod_trials, settings=settings)
@@ -188,6 +191,15 @@ class BanditRewardVolume(tt.RewardVolume):
         rewards[laser] = 0
 
         return rewards
+
+
+class BanditLaserProbability(BaseBpodTrialsExtractor):
+    save_names = '_av_trials.laserProbability.npy'
+    var_names = 'laserProbability'
+
+    def _extract(self):
+        laser = np.array([t['opto_block'] for t in self.bpod_trials]).astype(int)
+        return laser
 
 
 class BanditLaserStimulation(BaseBpodTrialsExtractor):
