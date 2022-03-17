@@ -143,9 +143,9 @@ class BanditChoice(tt.Choice):
             # When both thresholds are passed, take the first crossed threshold to be the choice direction
             choice = -1 if (data['behavior_data']['Events timestamps']['RotaryEncoder1_2'][0] >
                             data['behavior_data']['Events timestamps']['RotaryEncoder1_1'][0]) else 1
-        elif 'RotaryEncoder1_1' in data['behavior_data']['Events timestamps']: # this should be CCW
+        elif 'RotaryEncoder1_1' in data['behavior_data']['Events timestamps']:  # this should be CCW
             choice = -1
-        elif 'RotaryEncoder1_2' in data['behavior_data']['Events timestamps']: # this should be CW
+        elif 'RotaryEncoder1_2' in data['behavior_data']['Events timestamps']:  # this should be CW
             choice = 1
         else:
             choice = 0
@@ -186,7 +186,6 @@ class BanditContrastLR(tt.ContrastLR):
         contrastRight = np.array([t['contrast'] for t in self.bpod_trials])
 
         return contrastLeft, contrastRight
-
 
 
 class TrainingBanditPipeline(tasks.Pipeline):
