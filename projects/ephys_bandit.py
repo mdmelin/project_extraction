@@ -1,8 +1,3 @@
-import logging
-from collections import OrderedDict
-import numpy as np
-
-from ibllib.pipes import tasks
 import ibllib.io.extractors.training_trials as tt
 import projects.training_bandit as bt
 from ibllib.io.extractors.base import run_extractor_classes
@@ -10,7 +5,6 @@ from ibllib.io.extractors.base import get_session_extractor_type
 import ibllib.pipes.ephys_preprocessing as ephys_tasks
 from ibllib.io.extractors.ephys_fpga import FpgaTrials
 from ibllib.io.extractors.ephys_fpga import get_main_probe_sync
-from ibllib.io.extractors.base import BaseBpodTrialsExtractor
 
 import logging
 from collections import OrderedDict
@@ -18,9 +12,8 @@ import numpy as np
 from one.alf.io import AlfBunch
 
 from ibllib.pipes import tasks
-import ibllib.io.extractors.training_trials as tt
-import ibllib.pipes.training_preprocessing as training_tasks
-from ibllib.io.extractors.base import BaseBpodTrialsExtractor, run_extractor_classes
+
+from ibllib.io.extractors.base import BaseBpodTrialsExtractor
 import ibllib.io.extractors.base
 import ibllib.io.raw_data_loaders as rawio
 
