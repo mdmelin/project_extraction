@@ -1,0 +1,2 @@
+include projects/extractor_types.json
+include projects/task_type_procedures.json
