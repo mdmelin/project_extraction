@@ -204,3 +204,6 @@ class TrainingBanditPipeline(tasks.Pipeline):
         tasks['TrainingDLC'] = training_tasks.TrainingDLC(
             self.session_path, parents=[tasks['TrainingVideoCompress']])
         self.tasks = tasks
+
+
+__pipeline__ = TrainingBanditPipeline

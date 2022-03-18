@@ -235,10 +235,10 @@ class EphysBanditPipeline(tasks.Pipeline):
             self.session_path, parents=[tasks["EphysVideoCompress"], tasks["EphysPulses"], tasks["EphysBanditTrials"]])
         tasks["EphysCellsQc"] = ephys_tasks.EphysCellsQc(self.session_path, parents=[tasks["SpikeSorting"]])
         tasks["EphysDLC"] = ephys_tasks.EphysDLC(self.session_path, parents=[tasks["EphysVideoCompress"]])
-        self.tasks = tasks
         tasks["EphysPostDLC"] = ephys_tasks.EphysPostDLC(self.session_path,
                                                          parents=[tasks["EphysDLC"], tasks["EphysBanditTrials"],
                                                                   tasks["EphysVideoSyncQc"]])
+        self.tasks = tasks
 
 
 __pipeline__ = EphysBanditPipeline
