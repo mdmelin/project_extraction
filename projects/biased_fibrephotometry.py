@@ -1,30 +1,24 @@
 """Extraction pipeline for Alejandro's learning_witten_dop project, task protocol _iblrig_tasks_FPChoiceWorld6.4.2"""
 import logging
+from inspect import getmembers, isfunction
 from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-
-import one.alf.io as alfio
-
-from ibllib.pipes import tasks
-from ibllib.io.extractors.fibrephotometry import DEFAULT_CHMAP, FibrePhotometry as BaseFibrePhotometry
-from ibllib.io import raw_daq_loaders
-from ibllib.qc.base import QC
-from ibllib.pipes.ephys_preprocessing import (
-    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress, EphysVideoSyncQc,
-    EphysCellsQc, EphysDLC, SpikeSorting)
-import logging
-import warnings
-from inspect import getmembers, isfunction
-
-import numpy as np
-
-from ibllib.qc import base
 import one.alf.io as alfio
 from one.alf.exceptions import ALFObjectNotFound
 from one.alf.spec import is_session_path
 from iblutil.util import Bunch
+
+from ibllib.pipes import tasks
+from ibllib.io.extractors.fibrephotometry import DEFAULT_CHMAP, FibrePhotometry as BaseFibrePhotometry
+from ibllib.io import raw_daq_loaders
+from ibllib.dsp.utils import sync_timestamps
+from ibllib.qc.base import QC
+from ibllib.pipes.ephys_preprocessing import (
+    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress, EphysVideoSyncQc,
+    EphysCellsQc, EphysDLC, SpikeSorting)
+
 
 _logger = logging.getLogger('ibllib').getChild(__name__.split('.')[-1])
 
@@ -156,9 +150,9 @@ def dff_qc(dff, thres=0.05, frame_interval=40):
 class FibrePhotometry(BaseFibrePhotometry):
     """Unlike base extractor, this uses the Bpod times as the main clock"""
 
-    save_names = ('_ibl_photometry.green.npy', '_ibl_photometry.red.npy',
-                  'ibl_photometry.isosbestic.npy', 'ibl_photometry.timestamps.npy')
-    var_names = ('green', 'red', 'isobestic', 'timestamps')
+    save_names = ('_ibl_photometry.signal.npy', '_ibl_photometry.channels.npy',
+                  'ibl_photometry.timestamps.npy')
+    var_names = ('signal', 'channels', 'timestamps')
 
     def __init__(self, *args, **kwargs):
         """An extractor for all widefield data"""
@@ -174,11 +168,25 @@ class FibrePhotometry(BaseFibrePhotometry):
         -------
         """
         chmap = kwargs.get('chmap', DEFAULT_CHMAP['mcdaq'])
-        fp_path = self.session_path.joinpath('raw_fp_data')
-        daq_data = raw_daq_loaders.load_daq_tdms(fp_path, chmap)
+        daq_data = raw_daq_loaders.load_daq_tdms(self.session_path / 'raw_photometry_data', chmap)
+        fp_data = alfio.load_object(self.session_path / 'raw_photometry_data', 'fpData')
+        trials_data = alfio.load_object(self.session_path / 'alf', 'trials')
+        ts = self.sync_timestamps(daq_data, fp_data, trials_data)
 
-        # return [out[k] for k in out] + [wheel['timestamps'], wheel['position'],
-        #                                 moves['intervals'], moves['peakAmplitude']]
+        channel_meta_map = self._channel_meta()
+        channel_map = fp_data['channels'].set_index('Condition')
+        # Extract signal columns into 2D array
+        signal = fp_data['raw'].filter(like='Region', axis=1).sort_index(axis=1).values
+        # Extract channel index
+        state = fp_data['raw'].get('LedState', fp_data['raw'].get('Flags', None))
+        channel = np.empty_like(state)
+        for (label, ch), (id, wavelength) in zip(channel_map.items(), channel_meta_map['wavelength'].items()):
+            mask = state.isin(ch)
+            channel[mask] = id
+            if wavelength != 0:
+                assert str(wavelength) in label
+
+        return signal, channel, ts
 
     def _load_fp(self):
         # Load and rename FP files
@@ -195,19 +203,34 @@ class FibrePhotometry(BaseFibrePhotometry):
 
     def sync_timestamps(self, daq_data, fp_data, trials_data):
         """
+        Converts the Neurophotometrics frame timestamps in Bpod time using the Bpod feedback times.
+
+        Both the Neurophotometrics and Bpod devices are connected to a common DAQ. The Bpod sends
+        a TTL to the DAQ when feedback is delivered (among other things).  The Neurophotometrics
+        sends TTLs when a frame in the 470 channel is acquired.  This DAQ only records samples
+        (not timestamps) so the Bpod clock is used.  First the feedback TTLs are identified on the
+        DAQ based on length. The Bpod times for these TTLs are taken from the trials data and
+        assigned to a DAQ sample.  Times for the other DAQ samples are calculated using linear
+        interpolation.  Those timestamps for the samples where a Neurophotometrics TTL was received
+        are sync'd to the raw Neurophotometrics clock timestamps.  Using the determined
+        interpolation function, the raw Neurophotometrics timestamps for each frame are converted
+        to Bpod time.
 
         Parameters
         ----------
         daq_data : dict
             Dictionary with keys ('bpod', 'fp') containing voltage values acquired from the DAQ
-        fp_data : pandas.DataFrame
-            The raw fibrephotometry data
+        fp_data : dict
+            A Bunch containing the raw fibrephotometry data output from Neurophotometrics Bonsai
+            workflow and a table of channel values for interpreting the frame state.
         trials_data : dict
-            The Bpod trial events
+            An ALF trials object containing Bpod trials events.  Only `feedback_times` and `choice`
+            keys are required
 
         Returns
         -------
-
+        numpy.ndarray
+            An array of frame timestamps the length of fp_data
         """
         # For extraction we only use 470 channel - this channel is accompanied with a TTL
         # Column name 'Flags' in older Bonsai workflow
@@ -332,18 +355,15 @@ class FibrePhotometry(BaseFibrePhotometry):
         fp_daq_ts = fp_daq_ts[~fp_daq_ts.isna()]
         fp_ts = fp_data['Timestamp'].iloc[fp_daq_ts.index].values
         # Try to sync the two
-        from ibllib.dsp.utils import sync_timestamps
+        _logger.info('Synching Neurophotometrics clock to Bpod timestamps...')
         fcn, drift = sync_timestamps(fp_ts, fp_daq_ts.values)
         _logger.info(f'Drift: {drift:.2f}')
 
-        # Using the interpolation function from sync_timestamps, fill in missing Bpod times with
-        # interpolated FP clock times
-        to_update = fp_data['Timestamp'][fp_data['bpod_time'].isna()]
-        fp_data.iloc[to_update.index, daq_idx] = fcn(to_update.values)
-        assert fp_data['bpod_time'].is_monotonic_increasing  # Currently fails  #FIXME Run all timestamps through function?
+        # Using the interpolation function from sync_timestamps, convert FP clock timestamps to Bpod ones
+        fp_data.iloc[:, daq_idx] = fcn(fp_data['Timestamp'].values)
+        assert fp_data['bpod_time'].is_monotonic_increasing
 
-        # Save data
-        ...
+        return fp_data['bpod_time'].values
 
 
 class BiasedFibrephotometryPipeline(tasks.Pipeline):
