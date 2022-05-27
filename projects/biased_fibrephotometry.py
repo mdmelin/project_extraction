@@ -11,22 +11,22 @@ from one.alf.spec import is_session_path
 from iblutil.util import Bunch
 
 from ibllib.pipes import tasks
-from ibllib.io.extractors.fibrephotometry import DEFAULT_CHMAP, FibrePhotometry as BaseFibrePhotometry
+from ibllib.io.extractors.fibrephotometry import FibrePhotometry as BaseFibrePhotometry
 from ibllib.io import raw_daq_loaders
-from ibllib.dsp.utils import sync_timestamps
+from neurodsp.utils import sync_timestamps
 from ibllib.qc.base import QC
-from ibllib.pipes.ephys_preprocessing import (
-    EphysRegisterRaw, EphysPulses, RawEphysQC, EphysAudio, EphysMtscomp, EphysVideoCompress, EphysVideoSyncQc,
-    EphysCellsQc, EphysDLC, SpikeSorting)
+from ibllib.pipes.training_preprocessing import (
+    TrainingRegisterRaw, TrainingAudio, TrainingTrials, TrainingDLC, TrainingStatus, TrainingVideoCompress)
 
 
 _logger = logging.getLogger('ibllib').getChild(__name__.split('.')[-1])
 
-CHANNEL_MAP = {
-    0: 'None',
-    415: 'Violet',
-    470: 'Blue',
-    560: 'Green'
+# MC USB-201
+DEFAULT_CHMAP = {
+    'mcdaq': {
+        'bpod': 'ai1',
+        'fp': 'ai0'  # Fibrephotometry
+    },
 }
 
 
@@ -148,58 +148,33 @@ def dff_qc(dff, thres=0.05, frame_interval=40):
 
 
 class FibrePhotometry(BaseFibrePhotometry):
-    """Unlike base extractor, this uses the Bpod times as the main clock"""
-
-    save_names = ('_ibl_photometry.signal.npy', '_ibl_photometry.channels.npy',
-                  'ibl_photometry.timestamps.npy')
-    var_names = ('signal', 'channels', 'timestamps')
+    """Unlike base extractor, this uses the Bpod times as the main clock and syncs to MC DAQ"""
 
     def __init__(self, *args, **kwargs):
-        """An extractor for all widefield data"""
+        """An extractor for all biased_fibrephotometry task data"""
         super().__init__(*args, **kwargs)
 
-    def _extract(self, **kwargs):
-        """
+    def extract_timestamps(self, fp_data, chmap=None, **kwargs):
+        """Extract and sync the fibrephotometry timestamps acquired through the MC DAQ.
+
+        This function is called by the _extract method of the super class.
 
         Parameters
         ----------
+        fp_data : dict
+            A Bunch of raw fibrephotometry data, with the keys ('raw', 'channels').
+        chmap : dict
+            An optional dict of DAQ channel IDs for 'bpod' and 'fp' channel inputs.
 
         Returns
         -------
+        numpy.ndarray
+            A 1D array of timestamps, one per frame
         """
         chmap = kwargs.get('chmap', DEFAULT_CHMAP['mcdaq'])
         daq_data = raw_daq_loaders.load_daq_tdms(self.session_path / 'raw_photometry_data', chmap)
-        fp_data = alfio.load_object(self.session_path / 'raw_photometry_data', 'fpData')
         trials_data = alfio.load_object(self.session_path / 'alf', 'trials')
-        ts = self.sync_timestamps(daq_data, fp_data, trials_data)
-
-        channel_meta_map = self._channel_meta()
-        channel_map = fp_data['channels'].set_index('Condition')
-        # Extract signal columns into 2D array
-        signal = fp_data['raw'].filter(like='Region', axis=1).sort_index(axis=1).values
-        # Extract channel index
-        state = fp_data['raw'].get('LedState', fp_data['raw'].get('Flags', None))
-        channel = np.empty_like(state)
-        for (label, ch), (id, wavelength) in zip(channel_map.items(), channel_meta_map['wavelength'].items()):
-            mask = state.isin(ch)
-            channel[mask] = id
-            if wavelength != 0:
-                assert str(wavelength) in label
-
-        return signal, channel, ts
-
-    def _load_fp(self):
-        # Load and rename FP files
-        fp_data = alfio.load_object(self.session_path.joinpath('raw_fp_data'), 'fpData')
-        ...
-        # alfio.load_file_content()
-
-    def _channel_meta(self, chmap=None):
-        chmap = chmap or CHANNEL_MAP
-        names = ('wavelength', 'color')
-        meta = pd.DataFrame(sorted(chmap.items()), columns=names)
-        meta.index.rename('channel_id', inplace=True)
-        return meta
+        return self.sync_timestamps(daq_data, fp_data, trials_data)
 
     def sync_timestamps(self, daq_data, fp_data, trials_data):
         """
@@ -374,22 +349,15 @@ class BiasedFibrephotometryPipeline(tasks.Pipeline):
         tasks = OrderedDict()
         self.session_path = session_path
         # level 0
-        # TODO
-        tasks["EphysRegisterRaw"] = EphysRegisterRaw(self.session_path)
-        tasks["EphysPulses"] = EphysPulses(self.session_path)
-        tasks["EphysRawQC"] = RawEphysQC(self.session_path)
-        tasks["EphysAudio"] = EphysAudio(self.session_path)
-        tasks["EphysMtscomp"] = EphysMtscomp(self.session_path)
-        tasks['EphysVideoCompress'] = EphysVideoCompress(self.session_path)
+        tasks['TrainingRegisterRaw'] = TrainingRegisterRaw(self.session_path)
+        tasks['TrainingTrials'] = TrainingTrials(self.session_path)
+        tasks['TrainingVideoCompress'] = TrainingVideoCompress(self.session_path)
+        tasks['TrainingAudio'] = TrainingAudio(self.session_path)
         # level 1
-        tasks["SpikeSorting"] = SpikeSorting(
-            self.session_path, parents=[tasks["EphysMtscomp"], tasks["EphysPulses"]])
-        tasks["EphysBanditTrials"] = BiasedFibrephotometryPipeline(self.session_path, parents=[tasks["EphysPulses"]])
-        # level 2
-        tasks["EphysVideoSyncQc"] = EphysVideoSyncQc(
-            self.session_path, parents=[tasks["EphysVideoCompress"], tasks["EphysPulses"], tasks["EphysPassiveOptoTrials"]])
-        tasks["EphysCellsQc"] = EphysCellsQc(self.session_path, parents=[tasks["SpikeSorting"]])
-        tasks["EphysDLC"] = EphysDLC(self.session_path, parents=[tasks["EphysVideoCompress"]])
+        tasks['BiasedFibrePhotometry'] = FibrePhotometry(self.session_path, parents=[tasks['TrainingTrials']])
+        tasks['TrainingStatus'] = TrainingStatus(self.session_path, parents=[tasks['TrainingTrials']])
+        tasks['TrainingDLC'] = TrainingDLC(
+            self.session_path, parents=[tasks['TrainingVideoCompress']])
         self.tasks = tasks
 
 
