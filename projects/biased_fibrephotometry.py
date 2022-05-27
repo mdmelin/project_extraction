@@ -12,6 +12,7 @@ from iblutil.util import Bunch
 
 from ibllib.pipes import tasks
 from ibllib.io.extractors.fibrephotometry import FibrePhotometry as BaseFibrePhotometry
+from ibllib.pipes.fibrephotometry import FibrePhotometryPreprocess as BaseFibrePhotometryPreprocess
 from ibllib.io import raw_daq_loaders
 from neurodsp.utils import sync_timestamps
 from ibllib.qc.base import QC
@@ -21,9 +22,9 @@ from ibllib.pipes.training_preprocessing import (
 
 _logger = logging.getLogger('ibllib').getChild(__name__.split('.')[-1])
 
-# MC USB-201
+# MCC USB-201
 DEFAULT_CHMAP = {
-    'mcdaq': {
+    'mccdaq': {
         'bpod': 'ai1',
         'fp': 'ai0'  # Fibrephotometry
     },
@@ -148,14 +149,14 @@ def dff_qc(dff, thres=0.05, frame_interval=40):
 
 
 class FibrePhotometry(BaseFibrePhotometry):
-    """Unlike base extractor, this uses the Bpod times as the main clock and syncs to MC DAQ"""
+    """Unlike base extractor, this uses the Bpod times as the main clock and syncs to MCC DAQ"""
 
     def __init__(self, *args, **kwargs):
         """An extractor for all biased_fibrephotometry task data"""
         super().__init__(*args, **kwargs)
 
     def extract_timestamps(self, fp_data, chmap=None, **kwargs):
-        """Extract and sync the fibrephotometry timestamps acquired through the MC DAQ.
+        """Extract and sync the fibrephotometry timestamps acquired through the MCC DAQ.
 
         This function is called by the _extract method of the super class.
 
@@ -171,7 +172,7 @@ class FibrePhotometry(BaseFibrePhotometry):
         numpy.ndarray
             A 1D array of timestamps, one per frame
         """
-        chmap = kwargs.get('chmap', DEFAULT_CHMAP['mcdaq'])
+        chmap = kwargs.get('chmap', DEFAULT_CHMAP['mccdaq'])
         daq_data = raw_daq_loaders.load_daq_tdms(self.session_path / 'raw_photometry_data', chmap)
         trials_data = alfio.load_object(self.session_path / 'alf', 'trials')
         return self.sync_timestamps(daq_data, fp_data, trials_data)
@@ -341,6 +342,13 @@ class FibrePhotometry(BaseFibrePhotometry):
         return fp_data['bpod_time'].values
 
 
+class FibrePhotometryPreprocess(BaseFibrePhotometryPreprocess):
+
+    def _run(self, **kwargs):
+        _, out_files = FibrePhotometry(self.session_path).extract(save=True)
+        return out_files
+
+
 class BiasedFibrephotometryPipeline(tasks.Pipeline):
     label = __name__
 
@@ -354,7 +362,7 @@ class BiasedFibrephotometryPipeline(tasks.Pipeline):
         tasks['TrainingVideoCompress'] = TrainingVideoCompress(self.session_path)
         tasks['TrainingAudio'] = TrainingAudio(self.session_path)
         # level 1
-        tasks['BiasedFibrePhotometry'] = FibrePhotometry(self.session_path, parents=[tasks['TrainingTrials']])
+        tasks['BiasedFibrePhotometry'] = FibrePhotometryPreprocess(self.session_path, parents=[tasks['TrainingTrials']])
         tasks['TrainingStatus'] = TrainingStatus(self.session_path, parents=[tasks['TrainingTrials']])
         tasks['TrainingDLC'] = TrainingDLC(
             self.session_path, parents=[tasks['TrainingVideoCompress']])
