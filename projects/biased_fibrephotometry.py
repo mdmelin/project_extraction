@@ -173,11 +173,12 @@ class FibrePhotometry(BaseFibrePhotometry):
             A 1D array of timestamps, one per frame
         """
         chmap = kwargs.get('chmap', DEFAULT_CHMAP['mccdaq'])
-        daq_data = raw_daq_loaders.load_daq_tdms(self.session_path / 'raw_photometry_data', chmap)
+        daq_data = raw_daq_loaders.load_channels_tdms(self.session_path / 'raw_photometry_data', chmap)
         trials_data = alfio.load_object(self.session_path / 'alf', 'trials')
         return self.sync_timestamps(daq_data, fp_data, trials_data)
 
-    def sync_timestamps(self, daq_data, fp_data, trials_data):
+    @staticmethod
+    def sync_timestamps(daq_data, fp_data, trials_data):
         """
         Converts the Neurophotometrics frame timestamps in Bpod time using the Bpod feedback times.
 
