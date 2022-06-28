@@ -141,6 +141,7 @@ def check_photobleaching_qc(raw_signal, frame_window=1000):
         qc = 1 * ((last / init) > 0.8)
         return qc
 
+
 def dff_qc(dff, thres=0.05, frame_interval=40):
         separation_min = 2000 / frame_interval  # 2 seconds separation (10 min)
         peaks = np.where(dff > 0.05)[0]
@@ -184,14 +185,13 @@ class FibrePhotometry(BaseFibrePhotometry):
 
         Both the Neurophotometrics and Bpod devices are connected to a common DAQ. The Bpod sends
         a TTL to the DAQ when feedback is delivered (among other things).  The Neurophotometrics
-        sends TTLs when a frame in the 470 channel is acquired.  This DAQ only records samples
-        (not timestamps) so the Bpod clock is used.  First the feedback TTLs are identified on the
-        DAQ based on length. The Bpod times for these TTLs are taken from the trials data and
-        assigned to a DAQ sample.  Times for the other DAQ samples are calculated using linear
-        interpolation.  Those timestamps for the samples where a Neurophotometrics TTL was received
-        are sync'd to the raw Neurophotometrics clock timestamps.  Using the determined
-        interpolation function, the raw Neurophotometrics timestamps for each frame are converted
-        to Bpod time.
+        sends TTLs when a frame in the 470 channel is acquired.  The Bpod is used as the master
+        clock.  First the feedback TTLs are identified on the DAQ based on length. The Bpod times
+        for these TTLs are taken from the trials data and assigned to a DAQ sample.  Times for the
+        other DAQ samples are calculated using linear interpolation.  Those timestamps for the
+        samples where a Neurophotometrics TTL was received are sync'd to the raw Neurophotometrics
+        clock timestamps.  Using the determined interpolation function, the raw Neurophotometrics
+        timestamps for each frame are converted to Bpod time.
 
         Parameters
         ----------
