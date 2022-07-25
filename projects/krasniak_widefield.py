@@ -37,7 +37,7 @@ class Widefield(BaseWidefield):
 
         _logger.debug(f'Widefield-FPGA clock drift: {drift} ppm')
         assert led.frame.is_monotonic_increasing
-        video_path = next(self.data_path.glob('widefield.raw*.mov'))
+        video_path = next(self.data_path.glob('imaging.frames.mov'))
         video_meta = get_video_meta(video_path)
 
         diff = len(led) - video_meta.length
@@ -96,7 +96,7 @@ class WidefieldSyncKrasniak(WidefieldTask):
     level = 1
     force = False
     signature = {
-        'input_files': [('imaging.raw.mov', 'raw_widefield_data', True),
+        'input_files': [('imaging.frames.mov', 'raw_widefield_data', True),
                         ('widefieldEvents.raw.camlog', 'raw_widefield_data', True),
                         ('_spikeglx_sync.channels.npy', 'raw_ephys_data', True),
                         ('_spikeglx_sync.polarities.npy', 'raw_ephys_data', True),
