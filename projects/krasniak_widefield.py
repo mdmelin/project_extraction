@@ -5,7 +5,7 @@ import numpy as np
 from labcams.io import parse_cam_log
 import ibllib.exceptions as err
 from ibllib.io.video import get_video_meta
-from ibllib.pipes import tasks
+from ibllib.pipes.base_tasks import WidefieldTask
 import neurodsp as dsp
 import logging
 
@@ -91,19 +91,19 @@ class Widefield(BaseWidefield):
             return widefield_times, channel_id, channel_meta_map
 
 
-class WidefieldSyncKrasniak(tasks.Task):
+class WidefieldSyncKrasniak(WidefieldTask):
     priority = 60
     level = 1
     force = False
     signature = {
-        'input_files': [('widefield.raw.mov', 'raw_widefield_data', True),
+        'input_files': [('imaging.raw.mov', 'raw_widefield_data', True),
                         ('widefieldEvents.raw.camlog', 'raw_widefield_data', True),
                         ('_spikeglx_sync.channels.npy', 'raw_ephys_data', True),
                         ('_spikeglx_sync.polarities.npy', 'raw_ephys_data', True),
                         ('_spikeglx_sync.times.npy', 'raw_ephys_data', True)],
-        'output_files': [('widefield.times.npy', 'alf/widefield', True),
-                         ('widefield.widefieldLightSource.npy', 'alf/widefield', True),
-                         ('widefieldLightSource.properties.csv', 'alf/widefield', True)]
+        'output_files': [('imaging.times.npy', 'alf/widefield', True),
+                         ('imaging.imagingLightSource.npy', 'alf/widefield', True),
+                         ('imagingLightSource.properties.htsv', 'alf/widefield', True)]
     }
 
     def _run(self):
