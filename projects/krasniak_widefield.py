@@ -8,11 +8,32 @@ from ibllib.io.video import get_video_meta
 from ibllib.pipes.base_tasks import WidefieldTask
 import neurodsp as dsp
 import logging
+import wfield.cli as wfield_cli
 
 _logger = logging.getLogger('ibllib')
 
+DEFAULT_WIRING_MAP = {
+    3: 470,
+    2: 405
+}
+
 
 class Widefield(BaseWidefield):
+
+    def preprocess(self, fs=30, functional_channel=1, nbaseline_frames=30, k=200, nchannels=2):
+
+        # No motion correction for Krasniak
+
+        # COMPUTE AVERAGE FOR BASELINE
+        wfield_cli._baseline(str(self.data_path), nbaseline_frames, nchannels=nchannels)
+        # DATA REDUCTION
+        wfield_cli._decompose(str(self.data_path), k=k, nchannels=nchannels)
+        # HAEMODYNAMIC CORRECTION
+        # check if it is 2 channel
+        dat = wfield_cli.load_stack(str(self.data_path), nchannels=nchannels)
+        if dat.shape[1] == 2:
+            del dat
+            wfield_cli._hemocorrect(str(self.data_path), fs=fs, functional_channel=functional_channel)
 
     def sync_timestamps(self, save=False, save_paths=None, **kwargs):
 
@@ -95,6 +116,7 @@ class WidefieldSyncKrasniak(WidefieldTask):
     priority = 60
     level = 1
     force = False
+    job_size = 'small'
     signature = {
         'input_files': [('imaging.frames.mov', 'raw_widefield_data', True),
                         ('widefieldEvents.raw.camlog', 'raw_widefield_data', True),
@@ -115,3 +137,30 @@ class WidefieldSyncKrasniak(WidefieldTask):
         # TODO QC
 
         return out_files
+
+
+class WidefieldPreprocessKrasniak(WidefieldTask):
+
+    priority = 80
+    job_size = 'large'
+
+    @property
+    def signature(self):
+        signature = {
+            'input_files': [('*.dat', self.device_collection, True),
+                            ('widefieldEvents.raw.*', self.device_collection, True)],
+            'output_files': [('widefieldChannels.frameAverage.npy', 'alf/widefield', True),
+                             ('widefieldU.images.npy', 'alf/widefield', True),
+                             ('widefieldSVT.uncorrected.npy', 'alf/widefield', True),
+                             ('widefieldSVT.haemoCorrected.npy', 'alf/widefield', True)]
+        }
+        return signature
+
+    def _run(self, **kwargs):
+        self.wf = Widefield(self.session_path)
+        _, out_files = self.wf.extract(save=True, extract_timestamps=False)
+        return out_files
+
+    def tearDown(self):
+        super(WidefieldPreprocessKrasniak, self).tearDown()
+        self.wf.remove_files()
