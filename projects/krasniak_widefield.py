@@ -33,7 +33,7 @@ class Widefield(BaseWidefield):
         dat = wfield_cli.load_stack(str(self.data_path), nchannels=nchannels)
         if dat.shape[1] == 2:
             del dat
-            wfield_cli._hemocorrect(str(self.data_path), fs=fs, functional_channel=functional_channel)
+            wfield_cli._hemocorrect(str(self.data_path), fs=fs, functional_channel=functional_channel, plot_ext='.png')
 
     def sync_timestamps(self, save=False, save_paths=None, **kwargs):
 
