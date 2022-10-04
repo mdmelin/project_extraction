@@ -1,6 +1,7 @@
 from ibllib.io.extractors.widefield import Widefield as BaseWidefield
 from pathlib import Path
 from ibllib.io.extractors.ephys_fpga import get_main_probe_sync, get_sync_fronts
+from ibllib.plots.snapshot import ReportSnapshot
 import numpy as np
 from labcams.io import parse_cam_log
 import ibllib.exceptions as err
@@ -156,9 +157,21 @@ class WidefieldPreprocessKrasniak(WidefieldTask):
         }
         return signature
 
-    def _run(self, **kwargs):
+    def _run(self, upload_plots=True, **kwargs):
         self.wf = Widefield(self.session_path)
         _, out_files = self.wf.extract(save=True, extract_timestamps=False)
+
+        if upload_plots:
+            output_plots = []
+            if self.wf.data_path.joinpath('hemodynamic_correction.png').exists():
+                output_plots.append(self.wf.data_path.joinpath('hemodynamic_correction.png'))
+
+            if len(output_plots) > 0:
+                eid = self.one.path2eid(self.session_path)
+                snp = ReportSnapshot(self.session_path, eid, one=self.one)
+                snp.outputs = output_plots
+                snp.register_images(widths=['orig'], function='wfield')
+
         return out_files
 
     def tearDown(self):
