@@ -54,10 +54,7 @@ class Widefield(BaseWidefield):
         # Check that the no. of syncs from bpod and teensy match
         assert len(bpod['times']) == len(sync), 'Number of detected sync pulses on bpod and teensy do not match'
 
-        # convert to seconds
-        fcn, drift, iteensy, ifpga = dsp.utils.sync_timestamps(sync.timestamp.values / 1e3, bpod['times'], return_indices=True)
-
-        _logger.debug(f'Widefield-FPGA clock drift: {drift} ppm')
+        # Check the number of led frames matched the number of video frames
         assert led.frame.is_monotonic_increasing
         video_path = next(self.data_path.glob('imaging.frames.mov'))
         video_meta = get_video_meta(video_path)
@@ -70,22 +67,40 @@ class Widefield(BaseWidefield):
 
         led = led[0:video_meta.length]
 
-        # Find led times that are outside of the sync pulses
-        led_times = np.copy(led.timestamp.values)
-        pre_times = led_times < np.min(sync.timestamp)
-        post_times = led_times > np.max(sync.timestamp)
-        led_times[pre_times] = np.nan
-        led_times[post_times] = np.nan
+        def sync_times(bpod, sync, led, diff=0):
+            # convert to seconds
+            fcn, drift, iteensy, ifpga = dsp.utils.sync_timestamps(sync.timestamp.values / 1e3 - diff, bpod['times'],
+                                                                   return_indices=True)
 
-        # Interpolate frames that lie within sync pulses timeframe
-        widefield_times = fcn(led_times / 1e3)
-        kp = ~np.isnan(widefield_times)
-        # Extrapolate times that lie outside sync pulses timeframe (i.e before or after)
-        pol = np.polyfit(led_times[kp] / 1e3, widefield_times[kp], 1)
-        extrap_vals = np.polyval(pol, led.timestamp.values / 1e3)
-        widefield_times[~kp] = extrap_vals[~kp]
+            _logger.debug(f'Widefield-FPGA clock drift: {drift} ppm')
 
-        assert np.all(np.diff(widefield_times) > 0)
+            # Find led times that are outside of the sync pulses
+            led_times = np.copy(led.timestamp.values)
+            pre_times = led_times < np.min(sync.timestamp)
+            post_times = led_times > np.max(sync.timestamp)
+            led_times[pre_times] = np.nan
+            led_times[post_times] = np.nan
+
+            # Interpolate frames that lie within sync pulses timeframe
+            widefield_times = fcn(led_times / 1e3)
+            kp = ~np.isnan(widefield_times)
+            # Extrapolate times that lie outside sync pulses timeframe (i.e before or after)
+            pol = np.polyfit(led_times[kp] / 1e3, widefield_times[kp], 1)
+            extrap_vals = np.polyval(pol, led.timestamp.values / 1e3)
+            widefield_times[~kp] = extrap_vals[~kp]
+
+            return widefield_times
+
+        widefield_times = sync_times(bpod, sync, led)
+
+        try:
+            assert np.all(np.diff(widefield_times) > 0)
+        except AssertionError:
+            _logger.warning('Difference between timestamps not all > 0, trying to extract by first subtracting offset')
+            diff = sync.timestamp.values[0] / 1e3 - bpod['times'][0]
+            widefield_times = sync_times(bpod, sync, led, diff=diff)
+            widefield_times = widefield_times + diff
+            assert np.all(np.diff(widefield_times) > 0)
 
         # Now extract the LED channels and meta data
         # Load channel meta and wiring map
