@@ -5,11 +5,12 @@ from ibllib.plots.snapshot import ReportSnapshot
 import numpy as np
 from labcams.io import parse_cam_log
 import ibllib.exceptions as err
-from ibllib.io.video import get_video_meta
 from ibllib.pipes.base_tasks import WidefieldTask
 import neurodsp as dsp
 import logging
 import wfield.cli as wfield_cli
+from one.api import ONE
+from ibllib.io.extractors.camera import get_video_length
 
 _logger = logging.getLogger('ibllib')
 
@@ -56,16 +57,22 @@ class Widefield(BaseWidefield):
 
         # Check the number of led frames matched the number of video frames
         assert led.frame.is_monotonic_increasing
-        video_path = next(self.data_path.glob('imaging.frames.mov'))
-        video_meta = get_video_meta(video_path)
+        video_path = next(self.data_path.glob('imaging.frames.mov'), None)
+        if not video_path:
+            one = ONE()
+            datasets = one.list_datasets(one.path2eid(self.session_path), filename='imaging.frames')
+            url = one.path2url(self.session_path / datasets[0])
+            video_length = get_video_length(url)
+        else:
+            video_length = get_video_length(video_path)
 
-        diff = len(led) - video_meta.length
+        diff = len(led) - video_length
         if diff < 0:
             raise ValueError('More frames than timestamps detected')
         if diff > 2:
             raise ValueError('Timestamps and frames differ by more than 2')
 
-        led = led[0:video_meta.length]
+        led = led[0:video_length]
 
         def sync_times(bpod, sync, led, diff=0):
             # convert to seconds
