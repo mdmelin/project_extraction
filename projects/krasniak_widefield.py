@@ -60,7 +60,7 @@ class Widefield(BaseWidefield):
         video_path = next(self.data_path.glob('imaging.frames.mov'), None)
         if not video_path:
             one = ONE()
-            datasets = one.list_datasets(one.path2eid(self.session_path), filename='imaging.frames')
+            datasets = one.list_datasets(one.path2eid(self.session_path), filename='imaging.frames.mov')
             url = one.path2url(self.session_path / datasets[0])
             video_length = get_video_length(url)
         else:
