@@ -25,6 +25,7 @@ class Widefield(BaseWidefield):
     def preprocess(self, fs=30, functional_channel=1, nbaseline_frames=30, k=200, nchannels=2):
 
         # No motion correction for Krasniak
+        wfield_cli._motion(str(self.data_path), nchannels=nchannels, plot_ext='.png')
 
         # COMPUTE AVERAGE FOR BASELINE
         wfield_cli._baseline(str(self.data_path), nbaseline_frames, nchannels=nchannels)
