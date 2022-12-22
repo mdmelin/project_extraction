@@ -54,7 +54,12 @@ class Widefield(BaseWidefield):
                                             'Check channel maps.')
 
         # Check that the no. of syncs from bpod and teensy match
-        assert len(bpod['times']) == len(sync), 'Number of detected sync pulses on bpod and teensy do not match'
+        try:
+            assert len(bpod['times']) == len(sync), 'Number of detected sync pulses on bpod and teensy do not match,' \
+                                                    'trying laser ttl'
+        except AssertionError:
+            bpod = get_sync_fronts(fpga_sync, chmap['laser_ttl'])
+            assert len(bpod['times']) == len(sync), 'Number of detected sync pulses on laser and teensy do not match'
 
         # Check the number of led frames matched the number of video frames
         assert led.frame.is_monotonic_increasing
