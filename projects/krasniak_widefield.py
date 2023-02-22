@@ -112,7 +112,7 @@ class Widefield(BaseWidefield):
             _logger.warning('Difference between timestamps not all > 0, trying to extract by first subtracting offset')
             diff = sync.timestamp.values[0] / 1e3 - bpod['times'][0]
             widefield_times = sync_times(bpod, sync, led, diff=diff)
-            widefield_times = widefield_times + diff
+            widefield_times = widefield_times - diff
             assert np.all(np.diff(widefield_times) > 0)
 
         # Now extract the LED channels and meta data
