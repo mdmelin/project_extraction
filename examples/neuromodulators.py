@@ -3,6 +3,7 @@ from projects.neuromodulators import TrialsTableNeuromodulator
 
 
 session_path = "/datadisk/gdrive/2023/02_Neuromodulators/D6/2023-02-08/001"
+session_path = "/datadisk/gdrive/2023/02_Neuromodulators/ZFM-04022/2023-03-24/001"
 extractor = TrialsTableNeuromodulator(session_path)
 _, data_files = extractor.extract(save=True)
 
