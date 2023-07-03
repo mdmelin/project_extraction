@@ -1,9 +1,8 @@
-## %%
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from pybpodapi.protocol import StateMachine
-from iblrig.base_tasks import BaseSession, BpodMixin, SoundMixin
+from iblrig.base_tasks import BaseSession, BpodMixin
 import iblrig.sound
 from iblutil.util import Bunch, setup_logger
 from iblrig.hardware import sound_device_factory
@@ -73,19 +72,16 @@ class Session(BpodMixin, BaseSession):
             np.r_[np.diff(self.sequence_table['sequence']), 0] *  self.task_params.SEQUENCE_CHANGE_DELAY
         )
 
-
     def start_hardware(self):
         self.start_mixin_bpod()
         self.start_mixin_sound()
 
-
     def _run(self):
 
         # ideally we should populate the sound duration from the files read
-        log.info("Sending spacers through BPOD")
+        log.info("Sending spacers to BNC ports")
         self.send_spacers()
-
-
+        log.info("Start the oddball protocol sound state machine")
         sma = StateMachine(self.bpod)
         for i, rec in self.sequence_table.iterrows():
             # the first state triggers the sound and detects the upgoing front to move
@@ -122,23 +118,24 @@ class Session(BpodMixin, BaseSession):
             state_change_conditions={"Tup": "exit"},
         )
 
-
         self.bpod.send_state_machine(sma)
-
         self.bpod.run_state_machine(sma)
-        print(' toto')
 
         bpod_data = self.bpod.session.current_trial.export()
+
         # this fails when BNC is not connected
-        len(bpod_data['Events timestamps']['BNC2High'])
-        len(bpod_data['Events timestamps']['BNC2Low'])
+        self.sequence_table['bpod_timestamp'] = np.NaN
+        bnc_high = bpod_data['Events timestamps'].get('BNC2High', [])
+        n_bnc_high = len(bnc_high)
+        n_bnc_low = len(bpod_data['Events timestamps'].get('BNC2Low', []))
+        if not (n_bnc_high == n_bnc_low == self.sequence_table.shape[0]):
+            log.warning("BNC2High and BNC2Low do not match the number of sounds played, check the BNC connection"
+                        "from the sound card to the TTL I/O In2 port on the Bpod")
+        self.sequence_table['bpod_timestamp'] = bnc_high
+        self.sequence_table.to_parquet(self.paths.SESSION_RAW_DATA_FOLDER.joinpath('_iblrig_oddBallSoundsTable.pqt'))
 
-
-        # self.stop_mixin_bpod()
 
 if __name__ == "__main__":  # pragma: no cover
-    # python .\iblrig_tasks\_iblrig_tasks_biasedChoiceWorld\task.py --subject mysubject
     kwargs = iblrig.misc.get_task_runner_argument_parser()
     sess = Session(**kwargs)
     sess.run()
-
