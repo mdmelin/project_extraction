@@ -1,6 +1,8 @@
-## %% Example of a trials table extraction for Neuromodulator trials
+"""
+Example of a trials table extraction for Neuromodulator trials
+"""
+import pandas as pd
 from projects.neuromodulators import TrialsTableNeuromodulator
-
 
 session_path = "/datadisk/gdrive/2023/02_Neuromodulators/D6/2023-02-08/001"
 session_path = "/datadisk/gdrive/2023/02_Neuromodulators/ZFM-04022/2023-03-24/001"
@@ -9,7 +11,6 @@ _, data_files = extractor.extract(save=True)
 
 
 ## %% Loads the data afterwards
-import pandas as pd
 trials = pd.read_parquet(data_files[0])
 
 assert set(['exit_state', 'omit_feedback']).issubset(set(trials.keys()))
