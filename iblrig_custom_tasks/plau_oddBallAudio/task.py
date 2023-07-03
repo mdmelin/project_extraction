@@ -32,6 +32,7 @@ class Session(BpodMixin, BaseSession):
 
         # loop over all the sounds and 1) load them, 2) define bpod actions
         files_sounds = sorted(Path(self.task_params.FOLDER_SOUNDS).rglob("i*_*.bin"))
+        assert len(files_sounds) > 0, f"No sound binary files found in {self.task_params.FOLDER_SOUNDS}"
         df_sounds = pd.DataFrame(Bunch({
             'names': [f.stem for f in files_sounds if ' usermeta' not in f.stem],
             'harp_indices': np.arange(len(files_sounds)) + 2,
@@ -63,9 +64,8 @@ class Session(BpodMixin, BaseSession):
         self.df_sounds = df_sounds
 
         # now relate the loaded sounds to the sequence table
-
         self.sequence_table = self.sequence_table.merge(self.df_sounds, left_on='sound_name', right_on='names', how='left')
-
+        assert np.sum(np.isnan(self.sequence_table["harp_indices"])) == 0, f"Some sound files are missing from {self.task_params.FOLDER_SOUNDS}"
         #  this contains the actual delay for the state machine: sound duration + delay + sequence change delay
         self.sequence_table['state_delay'] = (
             self.sequence_table['delay'] +
