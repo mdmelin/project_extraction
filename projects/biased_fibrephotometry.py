@@ -12,23 +12,38 @@ from iblutil.util import Bunch
 
 from ibllib.pipes import tasks
 from ibllib.io.extractors.fibrephotometry import FibrePhotometry as BaseFibrePhotometry
-from ibllib.pipes.fibrephotometry import FibrePhotometryPreprocess as BaseFibrePhotometryPreprocess
+from ibllib.io.extractors.fibrephotometry import DAQ_CHMAP
+from ibllib.pipes.photometry_tasks import TaskFibrePhotometryPreprocess as PhotometryPreprocess
 from ibllib.io import raw_daq_loaders
-from neurodsp.utils import sync_timestamps
 from ibllib.qc.base import QC
 from ibllib.pipes.training_preprocessing import (
     TrainingRegisterRaw, TrainingAudio, TrainingTrials, TrainingDLC, TrainingStatus, TrainingVideoCompress)
+from scipy import interpolate
 
+NEUROPHOTOMETRICS_LED_STATES = {
+    'Condition': {
+        0: 'No additional signal',
+        1: 'Output 1 signal HIGH',
+        2: 'Output 0 signal HIGH',
+        3: 'Stimulation ON',
+        4: 'GPIO Line 2 HIGH',
+        5: 'GPIO Line 3 HIGH',
+        6: 'Input 1 HIGH',
+        7: 'Input 0 HIGH',
+        8: 'Output 0 signal HIGH + Stimulation',
+        9: 'Output 0 signal HIGH + Input 0 signal HIGH',
+        10: 'Input 0 signal HIGH + Stimulation',
+        11: 'Output 0 HIGH + Input 0 HIGH + Stimulation',
+    },
+    'No LED ON': {0: 0, 1: 8, 2: 16, 3: 32, 4: 64, 5: 128, 6: 256, 7: 512, 8: 48, 9: 528, 10: 544, 11: 560},
+    'L415':  {0: 1, 1: 9, 2: 17, 3: 33, 4: 65, 5: 129, 6: 257, 7: 513, 8: 49, 9: 529, 10: 545, 11: 561},
+    'L470':  {0: 2, 1: 10, 2: 18, 3: 34, 4: 66, 5: 130, 6: 258, 7: 514, 8: 50, 9: 530, 10: 546, 11: 562},
+    'L560':  {0: 4, 1: 12, 2: 20, 3: 36, 4: 68, 5: 132, 6: 260, 7: 516, 8: 52, 9: 532, 10: 548, 11: 564}
+}
+
+CHANNELS = pd.DataFrame.from_dict(NEUROPHOTOMETRICS_LED_STATES)
 
 _logger = logging.getLogger('ibllib').getChild(__name__.split('.')[-1])
-
-# MCC USB-201
-DEFAULT_CHMAP = {
-    'mccdaq': {
-        'bpod': 'ai1',
-        'fp': 'ai0'  # Fibrephotometry
-    },
-}
 
 
 # upload to the session endpoint, qc per regions
@@ -84,7 +99,6 @@ class FibrePhotometryQC(QC):
                         raise AssertionError(f'Dataset {ds} not found locally and failed to download')
                 else:
                     raise AssertionError(f'Dataset {ds} not found locally and download_data is False')
-
 
     def run(self, update: bool = False, **kwargs) -> (str, dict):
 
@@ -156,6 +170,51 @@ class FibrePhotometry(BaseFibrePhotometry):
         """An extractor for all biased_fibrephotometry task data"""
         super().__init__(*args, **kwargs)
 
+    def _extract(self, light_source_map=None, collection=None, regions=None, **kwargs):
+        """
+
+        Parameters
+        ----------
+        regions: list of str
+            The list of regions to extract. If None extracts all columns containing "Region". Defaults to None.
+        light_source_map : dict
+            An optional map of light source wavelengths (nm) used and their corresponding colour name.
+        collection: str / pathlib.Path
+            An optional relative path from the session root folder to find the raw photometry data.
+            Defaults to `raw_photometry_data`
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of signal values.
+        numpy.ndarray
+            A 1D array of ints corresponding to the active light source during a given frame.
+        pandas.DataFrame
+            A table of intensity for each region, with associated times, wavelengths, names and colors
+        """
+        out_df = super()._extract(light_source_map=None, collection=None, regions=None, **kwargs)
+
+        fp_path = self.session_path.joinpath('raw_fp_data')
+        if not fp_path.exists():
+            fp_path = self.session_path.joinpath('alf', 'fp_data')
+
+        fp_data = alfio.load_object(self.session_path / collection, 'fpData')
+        processed = pd.read_csv(fp_path.joinpath('FP470_processed.csv'))
+        assert processed['FrameCounter'].diff()[1:] == processed['FrameCounter'].diff().median()
+        include = np.zeros_like(out_df['times'].values, dtype=bool)
+        state = fp_data.get('LedState', fp_data.get('Flags', None))
+        mask = state.isin(CHANNELS['L470'])
+        frame_470 = np.where(mask)[0]
+        first_470 = frame_470[0]
+        diff_470 = np.diff(frame_470)[0]
+        fr_start = np.where(fp_data['FrameCounter'].values == processed.iloc[0]['FrameCounter'])[0][0] - first_470
+        fr_end = np.where(fp_data['FrameCounter'].values == processed.iloc[-1]['FrameCounter'])[0][0] + (
+                    diff_470 - first_470)
+        include[fr_start:fr_end] = 1
+        out_df['include'] = include
+
+        return out_df
+
     def extract_timestamps(self, fp_data, chmap=None, **kwargs):
         """Extract and sync the fibrephotometry timestamps acquired through the MCC DAQ.
 
@@ -173,13 +232,13 @@ class FibrePhotometry(BaseFibrePhotometry):
         numpy.ndarray
             A 1D array of timestamps, one per frame
         """
-        chmap = kwargs.get('chmap', DEFAULT_CHMAP['mccdaq'])
+        chmap = kwargs.get('chmap', DAQ_CHMAP)
         daq_data = raw_daq_loaders.load_channels_tdms(self.session_path / 'raw_photometry_data', chmap)
         trials_data = alfio.load_object(self.session_path / 'alf', 'trials')
         return self.sync_timestamps(daq_data, fp_data, trials_data)
 
     @staticmethod
-    def sync_timestamps(daq_data, fp_data, trials_data):
+    def sync_timestamps(daq_data, fp_data, trials):
         """
         Converts the Neurophotometrics frame timestamps in Bpod time using the Bpod feedback times.
 
@@ -200,7 +259,7 @@ class FibrePhotometry(BaseFibrePhotometry):
         fp_data : dict
             A Bunch containing the raw fibrephotometry data output from Neurophotometrics Bonsai
             workflow and a table of channel values for interpreting the frame state.
-        trials_data : dict
+        trials : dict
             An ALF trials object containing Bpod trials events.  Only `feedback_times` and `choice`
             keys are required
 
@@ -209,144 +268,72 @@ class FibrePhotometry(BaseFibrePhotometry):
         numpy.ndarray
             An array of frame timestamps the length of fp_data
         """
-        # For extraction we only use 470 channel - this channel is accompanied with a TTL
-        # Column name 'Flags' in older Bonsai workflow
-        fp_channels = fp_data['channels']
-        fp_data = fp_data['raw'].copy()
-        state = fp_data.get('LedState', fp_data.get('Flags', None))
-        mask = state.isin(fp_channels['L470'])
-        frame_numbers_470 = fp_data['FrameCounter'][mask]
 
         daq_data = pd.DataFrame.from_dict(daq_data)
-        # Threshold Convert analogue
-        daq_data['fp'] = 1 * (daq_data['fp'] >= 4)
+        daq_data['photometry'] = 1 * (daq_data['photometry'] >= 4)
         daq_data['bpod'] = 1 * (daq_data['bpod'] >= 2)
 
-        # Patch session if needed: Delete short pulses (sample smaller than frame acquisition rate) or
-        # pulses before acquisition for FP and big breaks (acquisition started twice)
-        daq_data.loc[np.where(daq_data['fp'].diff() == 1)[0], 'TTL_change'] = 1
-        pulse_interval = np.median(np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index))
-        # Fix for when TTL send on every single frame instead of 470 channel frame
-        # 10 because acquisition was at 25Hz; DAQ - 1000Hz
-        # Frame rate from FP data file should match frame rate on DAQ
-        if pulse_interval == 10:  # New protocol saves ITI for all: 470,145 and 2x empty frames
-            _logger.debug('TTL on every frame; correcting (removing pulses from non-470 channels)')
-            true_FP = daq_data.loc[daq_data['TTL_change'] == 1].index[::4]
-            daq_data['TTL_change'] = 0
-            daq_data['fp'] = 0
-            daq_data.iloc[true_FP, daq_data.columns.get_loc('TTL_change')] = 1
-            daq_data.iloc[true_FP, daq_data.columns.get_loc('fp')] = 1
-            daq_data.iloc[true_FP + 1, daq_data.columns.get_loc('fp')] = 1  # Pulses are 2ms long
-            daq_data.loc[np.where(daq_data['fp'].diff() == 1)[0], 'TTL_change'] = 1
-            # Double-check fix worked, get corrected interval
-            pulse_interval = np.median(np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index))
-        _logger.info(f'Pulse interval: {pulse_interval}')
+        # Find if the session has been started more than twice
+        daq_data.loc[np.where(daq_data['photometry'].diff() == 1)[0], 'photometry_ttl'] = 1
+        ttl_interval = np.median(np.diff(daq_data.loc[daq_data['photometry_ttl'] == 1].index))
+        state = fp_data.get('LedState', fp_data.get('Flags', None))
+        mask = state.isin(CHANNELS['L470'])
+        if ttl_interval == 40:
+            frame_number = fp_data['FrameCounter'][mask]
+        elif ttl_interval == 10:
+            frame_number = fp_data['FrameCounter']
 
-        # Bpod crashed and was restarted but DAQ wasn't restarted
-        # If greater than 4 times the 410 chan frame rate, there must have been a long gap
-        # Do this until no more gaps
-        while np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index).max() > pulse_interval * 4:
-            _logger.info('Large gaps detected, assuming false starts; removing...')
-            # Find the biggest TTL gap index
-            ttl_id = np.where(np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index) ==
-                np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index).max())[0][0]
-            # Transform into actual DAQ index
-            real_id = daq_data.loc[daq_data['TTL_change'] == 1].index[ttl_id]
-            # Remove all TTLs up to this large gap (set to 0)
-            daq_data.iloc[:int(real_id + np.diff(daq_data.loc[daq_data['TTL_change'] == 1].index).max() - pulse_interval), :] = 0
+        ttl_diff = np.diff(daq_data.loc[daq_data['photometry_ttl'] == 1].index)
+        while ttl_diff.max() > ttl_interval * 3:
+            print(f'Big gaps: {ttl_diff.max()}')
+            ttl_id = np.where(ttl_diff == ttl_diff.max())[0][0]
+            real_id = daq_data.loc[daq_data['photometry_ttl'] == 1].index[ttl_id]
+            daq_data.iloc[:int(real_id + ttl_diff.max() - ttl_interval), :] = 0
+            daq_data.loc[np.where(daq_data['photometry'].diff() == 1)[0], 'photometry_ttl'] = 1
+            ttl_diff = np.diff(daq_data.loc[daq_data['photometry_ttl'] == 1].index)
 
-        # Update TTL change column
-        daq_data['TTL_change'] = 0
-        daq_data.loc[np.where(daq_data['fp'].diff() == 1)[0], 'TTL_change'] = 1
+        photometry_ttl = np.where(daq_data['photometry_ttl'] == 1)[0].astype(int)
+        assert (np.abs(photometry_ttl.size - frame_number.size) <= 15)
+        fp_data.loc[frame_number, 'daq_timestamp'] = photometry_ttl[:len(frame_number)]
 
-        # Check that there aren't too many empty frames
-        # Number of recorded TTLs on DAQ should roughly equal the number of FP 470 frames
-        # Six was empirically determined: There is a delay between Bonsai stopping a session and the
-        # LED (sending the TTLs) permanently turning off. In a recent test I saw that if I acquire at
-        # 15Hz there is no extra pulses, at 25Hz 2 pulses and at 100Hz 5 pulses.
-        dropped_frames = abs(len(np.where(daq_data['fp'].diff() == 1)[0]) - len(frame_numbers_470))
-        assert dropped_frames < 6
-        _logger.debug(f'{dropped_frames} dropped frames')
+        daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'ttl_on'] = 1
+        daq_data.loc[np.where(daq_data['bpod'].diff() == -1)[0], 'ttl_off'] = 1
+        daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'ttl_duration'] = \
+            daq_data.loc[daq_data['ttl_off'] == 1].index - daq_data.loc[daq_data['ttl_on'] == 1].index
+        # Valve and error tones have pulses > 100
+        daq_data.loc[daq_data['ttl_duration'] > 100, 'feedback_times'] = 1
 
-        # Align events
-        fp_data['DAQ_idx'] = np.nan
-        daq_idx = fp_data.columns.get_loc('DAQ_idx')
-        daq_ttl_edges = np.where(daq_data['fp'].diff() == 1)[0]
-        # discard DAQ TTLs missed at end of session
-        fp_data.iloc[frame_numbers_470, daq_idx] = daq_ttl_edges[:len(frame_numbers_470)]
+        n_daq_trials = (daq_data['feedback_times'] == 1).sum()
+        if n_daq_trials == trials['feedback_times'].size:
+            daq_data.loc[daq_data['feedback_times'] == 1, 'bpod_times'] = trials['feedback_times']
+        elif n_daq_trials - trials['feedback_times'].size == 1:
+            daq_data.loc[daq_data['feedback_times'] == 1, 'bpod_times'] = np.r_[trials['feedback_times'], np.nan]
+        else:
+            assert n_daq_trials == trials['feedback_times'].size, "Trials don't match up"
 
-        # Extract Trial Events
-        daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'bpod_on'] = 1
-        daq_data.loc[np.where(daq_data['bpod'].diff() == -1)[0], 'bpod_off'] = 1
-        daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'bpod_duration'] = \
-            daq_data.loc[daq_data['bpod_off'] == 1].index - \
-            daq_data.loc[daq_data['bpod_on'] == 1].index
-        daq_data['feedbackTimes'] = np.nan
-        daq_data.loc[daq_data['bpod_duration'] > 105, 'feedbackTimes'] = 1
-        daq_data['bpod_event'] = np.nan
-        daq_data.loc[daq_data['bpod_duration'] > 1000, 'bpod_event'] = 'error'
-        daq_data.loc[daq_data['bpod_duration'] <= 105, 'bpod_event'] = 'trial_start'
-        # Changes from rig-to-rig depending on valve calibration
-        daq_data.loc[(daq_data['bpod_duration'] > 100) &
-                   (daq_data['bpod_duration'] < 1000), 'bpod_event'] = 'reward'
+        daq_data['bpod_times'].interpolate(inplace=True)
+        # Set values after last pulse to nan
+        bpod_column = daq_data.columns.get_loc("bpod_times")
+        daq_data.iloc[np.where(daq_data['bpod_times'] == daq_data['bpod_times'].max())[0][1]:, bpod_column] = np.nan
 
-        # Interpolate times from bpod clock
-        # Check we have same number of trial on DAQ and Bpod
-        assert abs(len(daq_data.loc[daq_data['feedbackTimes'] == 1]) - len(trials_data['feedback_times'])) <= 1
+        fp_data.loc[frame_number, 'bpod_times'] = daq_data['bpod_times'].values[
+            fp_data.loc[frame_number, 'daq_timestamp'].values.astype(int)]
 
-        daq_data['bpod_time'] = np.nan
-        nan_trials = np.where(trials_data['choice'] == 0)[0]  # No choice was made
-        if len(nan_trials) != 0:  # If there are no gos
-            try:  # For new code with bpod pulses also in NO GOs
-                # Assign Bpod feedback times to each TTL sample
-                daq_data.loc[daq_data['feedbackTimes'] == 1, 'bpod_time'] = trials_data['feeback_times']
-            except:  # For older code without pulses in nan
-                if len(trials_data['feedback_times']) > len(daq_data.loc[daq_data['feedbackTimes'] == 1]):
-                    trials_data['feedback_times'] = np.delete(trials_data['feedback_times'], nan_trials)
+        use_times = ~fp_data['bpod_times'].isna()
 
-        # If number of pulses match, assign trials.feedback_times to 'bpod_time' column.
-        # We will interpolate these times for each frame next
-        if (len(daq_data.loc[daq_data['feedbackTimes'] == 1]) - len(trials_data['feedback_times'])) == 0:
-            daq_data.loc[daq_data['feedbackTimes'] == 1, 'bpod_time'] = trials_data['feedback_times']
+        fcn = interpolate.interp1d(fp_data['Timestamp'][use_times].values, fp_data['bpod_times'][use_times].values,
+                                   fill_value="extrapolate")
 
-        # If task was stopped before last trial ended, add nan for last pulse
-        if (len(daq_data.loc[daq_data['feedbackTimes'] == 1]) - len(trials_data['feedback_times'])) == 1:
-            _logger.debug('Bpod missing last trial')
-            daq_data.loc[daq_data['feedbackTimes'] == 1, 'bpod_time'] = np.append(trials_data['feedback_times'], np.nan)
-        # TODO Assert feedback TTLs match feedback times
+        ts = fcn(fp_data['Timestamp'].values)
 
-        # Interpolate Bpod times
-        daq_data['bpod_time'].interpolate(inplace=True)
-        # Delete values after last known bpod - interpolate will not extrapolate!
-        daq_data.iloc[np.where(daq_data['bpod_time'] == daq_data['bpod_time'].max())[0][1]:,
-                    daq_data.columns.get_loc('bpod_time')] = np.nan
-        # Align photometry data with bpod time
-        fp_data['bpod_time'] = np.nan
-        daq_idx = fp_data.columns.get_loc('bpod_time')
-        # Assign Bpod time for all photometry DAQ pulses to new column to later save into timestamps ALF
-        fp_data.iloc[frame_numbers_470, daq_idx] = \
-            daq_data['bpod_time'].to_numpy()[daq_ttl_edges[:len(frame_numbers_470)]]
-
-        # Get the interpolated Bpod timestamps and FP clock timestamps
-        fp_daq_ts = fp_data.iloc[frame_numbers_470, daq_idx]
-        fp_daq_ts = fp_daq_ts[~fp_daq_ts.isna()]
-        fp_ts = fp_data['Timestamp'].iloc[fp_daq_ts.index].values
-        # Try to sync the two
-        _logger.info('Synching Neurophotometrics clock to Bpod timestamps...')
-        fcn, drift = sync_timestamps(fp_ts, fp_daq_ts.values)
-        _logger.info(f'Drift: {drift:.2f}')
-
-        # Using the interpolation function from sync_timestamps, convert FP clock timestamps to Bpod ones
-        fp_data.iloc[:, daq_idx] = fcn(fp_data['Timestamp'].values)
-        assert fp_data['bpod_time'].is_monotonic_increasing
-
-        return fp_data['bpod_time'].values
+        return ts
 
 
-class FibrePhotometryPreprocess(BaseFibrePhotometryPreprocess):
+class FibrePhotometryPreprocess(PhotometryPreprocess):
 
     def _run(self, **kwargs):
-        _, out_files = FibrePhotometry(self.session_path).extract(save=True)
+        _, out_files = FibrePhotometry(self.session_path, collection=self.collection).extract(
+            regions=self.regions, path_out=self.session_path.joinpath('alf', 'photometry'), save=True)
         return out_files
 
 
