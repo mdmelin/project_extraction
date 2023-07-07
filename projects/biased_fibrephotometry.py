@@ -179,7 +179,7 @@ class FibrePhotometry(BaseFibrePhotometry):
 
         fp_data = alfio.load_object(self.session_path.joinpath(self.collection), 'fpData')
         processed = pd.read_csv(fp_path.joinpath('FP470_processed.csv'))
-        assert processed['FrameCounter'].diff()[1:] == processed['FrameCounter'].diff().median()
+        assert all(processed['FrameCounter'].diff()[1:] == processed['FrameCounter'].diff().median())
         include = np.zeros_like(out_df['times'].values, dtype=bool)
         state = fp_data.get('LedState', fp_data.get('Flags', None))
         mask = state.isin(CHANNELS['L470'])
