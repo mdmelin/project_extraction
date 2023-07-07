@@ -13,7 +13,7 @@ from iblutil.util import Bunch
 from ibllib.pipes import tasks
 from ibllib.io.extractors.fibrephotometry import FibrePhotometry as BaseFibrePhotometry
 from ibllib.io.extractors.fibrephotometry import DAQ_CHMAP
-from ibllib.pipes.photometry_tasks import TaskFibrePhotometryPreprocess as PhotometryPreprocess
+from ibllib.pipes.photometry_tasks import FibrePhotometryPreprocess as PhotometryPreprocess
 from ibllib.io import raw_daq_loaders
 from ibllib.qc.base import QC
 from ibllib.pipes.training_preprocessing import (
