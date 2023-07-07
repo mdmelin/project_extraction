@@ -177,7 +177,7 @@ class FibrePhotometry(BaseFibrePhotometry):
         if not fp_path.exists():
             fp_path = self.session_path.joinpath('alf', 'fp_data')
 
-        fp_data = alfio.load_object(self.session_path.joinpath(self.collection), 'fpData')
+        fp_data = alfio.load_object(self.session_path.joinpath(self.collection), 'fpData')['raw']
         processed = pd.read_csv(fp_path.joinpath('FP470_processed.csv'))
         assert all(processed['FrameCounter'].diff()[1:] == processed['FrameCounter'].diff().median())
         include = np.zeros_like(out_df['times'].values, dtype=bool)
