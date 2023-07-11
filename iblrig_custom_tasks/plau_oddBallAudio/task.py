@@ -22,7 +22,45 @@ class Session(BpodMixin, BaseSession):
         super(Session, self).__init__(*args, **kwargs)
         self.sound = {}
         self.sound['sd'], self.sound['samplerate'], self.sound['channels'] = sound_device_factory(output='harp')
+        self.task_params.SEQUENCE_FILE = self.task_params.SEQUENCE_FILE or Path(__file__).parent.joinpath('sound_sequence.csv')
+        self.task_params.FOLDER_SOUNDS = self.task_params.FOLDER_SOUNDS or Path(__file__).parent.joinpath('tones')
         self.sequence_table = pd.read_csv(self.task_params.SEQUENCE_FILE)
+
+        # initialize the sounds table from the csv file
+        # loop over all the sounds and 1) load them, 2) define bpod actions
+        files_sounds = sorted(Path(self.task_params.FOLDER_SOUNDS).rglob("i*_*.bin"))
+        assert len(files_sounds) > 0, f"No sound binary files found in {self.task_params.FOLDER_SOUNDS}"
+        self.df_sounds = pd.DataFrame(Bunch({
+            'names': [f.stem for f in files_sounds if ' usermeta' not in f.stem],
+            'harp_indices': np.arange(len(files_sounds)) + 2,
+            'bin_duration': np.zeros(len(files_sounds)),
+        }))
+        self.df_sounds['bpod_action'] = ""
+        self.all_sounds = []
+
+        for i, fsound in enumerate(files_sounds):
+            s = np.fromfile(fsound, dtype=np.int32).astype(np.float32)
+            s = s.reshape(int(s.size / 2), 2).astype(np.float32) / 2 ** 31
+            s = s * self.task_params.HARP_AMPLITUDE / self.task_params.HARP_DUMP_TONE_AMPLITUDE
+            self.all_sounds.append(s)
+            sn = self.df_sounds.at[i, 'names']
+            self.df_sounds.at[i, 'bin_duration'] = s.shape[0] / self.sound['samplerate']
+            f'play_{sn}'
+            bpod_message = [ord("P"), self.df_sounds.at[i, 'harp_indices']]
+            self.bpod.actions.update({
+                f'play_{sn}': ('Serial3', self.bpod._define_message(self.bpod.sound_card, bpod_message)),
+            })
+            self.df_sounds.at[i, 'bpod_action'] = f'play_{sn}'
+        # now relate the loaded sounds to the sequence table
+        self.sequence_table = self.sequence_table.merge(self.df_sounds, left_on='sound_name', right_on='names',
+                                                        how='left')
+        assert np.sum(np.isnan(self.sequence_table["harp_indices"])) == 0, \
+            f"Some sound files are missing from {self.task_params.FOLDER_SOUNDS}"
+        #  this contains the actual delay for the state machine: sound duration + delay + sequence change delay
+        self.sequence_table['state_delay'] = (
+                self.sequence_table['delay'] +
+                np.r_[np.diff(self.sequence_table['sequence']), 0] * self.task_params.SEQUENCE_CHANGE_DELAY
+        )
 
     def start_mixin_sound(self):
         """
@@ -30,62 +68,20 @@ class Session(BpodMixin, BaseSession):
         :return:
         """
         assert self.sound['samplerate'] == 96000
-
-        # loop over all the sounds and 1) load them, 2) define bpod actions
-        files_sounds = sorted(Path(self.task_params.FOLDER_SOUNDS).rglob("i*_*.bin"))
-        assert len(files_sounds) > 0, f"No sound binary files found in {self.task_params.FOLDER_SOUNDS}"
-        df_sounds = pd.DataFrame(Bunch({
-            'names': [f.stem for f in files_sounds if ' usermeta' not in f.stem],
-            'harp_indices': np.arange(len(files_sounds)) + 2,
-            'bin_duration': np.zeros(len(files_sounds)),
-        }))
-        df_sounds['bpod_action'] = ""
-        all_sounds = []
-
-        for i, fsound in enumerate(files_sounds):
-            s = np.fromfile(fsound, dtype=np.int32).astype(np.float32)
-            s = s.reshape(int(s.size / 2), 2).astype(np.float32) / 2 ** 31
-            s = s * self.task_params.HARP_AMPLITUDE / self.task_params.HARP_DUMP_TONE_AMPLITUDE
-            all_sounds.append(s)
-            sn = df_sounds.at[i, 'names']
-            df_sounds.at[i, 'bin_duration'] = s.shape[0] / self.sound['samplerate']
-            f'play_{sn}'
-            bpod_message = [ord("P"), df_sounds.at[i, 'harp_indices']]
-            self.bpod.actions.update({
-                f'play_{sn}': ('Serial3', self.bpod._define_message(self.bpod.sound_card, bpod_message)),
-            })
-            df_sounds.at[i, 'bpod_action'] = f'play_{sn}'
-
         # once all sounds are loaded, send them over to the harp sound card
         iblrig.sound.configure_sound_card(
-            sounds=all_sounds,
-            indexes=list(df_sounds['harp_indices']),
+            sounds=self.all_sounds,
+            indexes=list(self.df_sounds['harp_indices']),
             sample_rate=self.sound['samplerate'],
-        )
-        self.df_sounds = df_sounds
-
-        # now relate the loaded sounds to the sequence table
-        self.sequence_table = self.sequence_table.merge(self.df_sounds, left_on='sound_name', right_on='names', how='left')
-        assert np.sum(np.isnan(self.sequence_table["harp_indices"])) == 0,\
-            f"Some sound files are missing from {self.task_params.FOLDER_SOUNDS}"
-        #  this contains the actual delay for the state machine: sound duration + delay + sequence change delay
-        self.sequence_table['state_delay'] = (
-            self.sequence_table['delay'] +
-            np.r_[np.diff(self.sequence_table['sequence']), 0] * self.task_params.SEQUENCE_CHANGE_DELAY
         )
 
     def start_hardware(self):
         self.start_mixin_bpod()
         self.start_mixin_sound()
 
-    def _run(self):
-
-        # ideally we should populate the sound duration from the files read
-        log.info("Sending spacers to BNC ports")
-        self.send_spacers()
-        log.info("Start the oddball protocol sound state machine")
+    def get_state_machine(self, sequence):
         sma = StateMachine(self.bpod)
-        for i, rec in self.sequence_table.iterrows():
+        for i, rec in self.sequence_table[self.sequence_table['sequence'] == sequence].iterrows():
             # the first state triggers the sound and detects the upgoing front to move
             sma.add_state(
                 state_name=f"trigger_sound_{i}",
@@ -119,11 +115,22 @@ class Session(BpodMixin, BaseSession):
             state_timer=0.0,
             state_change_conditions={"Tup": "exit"},
         )
+        return sma
 
-        self.bpod.send_state_machine(sma)
-        self.bpod.run_state_machine(sma)
+    def _run(self):
 
-        bpod_data = self.bpod.session.current_trial.export()
+        # ideally we should populate the sound duration from the files read
+        log.info("Sending spacers to BNC ports")
+        self.send_spacers()
+        log.info("Start the oddball protocol sound state machine")
+
+        for seq in self.sequence_table['sequence'].unique():
+            for _ in range(self.task_params.REPEAT_SEQUENCE):
+                log.info(f"Running sequence {seq}")
+                sma = self.get_state_machine(seq)
+                self.bpod.send_state_machine(sma)
+                self.bpod.run_state_machine(sma)
+                bpod_data = self.bpod.session.current_trial.export()
 
         # this fails when BNC is not connected
         self.sequence_table['bpod_timestamp'] = np.NaN
