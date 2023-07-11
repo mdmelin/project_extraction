@@ -7,6 +7,7 @@ import iblrig.sound
 from iblutil.util import Bunch, setup_logger
 from iblrig.hardware import sound_device_factory
 
+import iblrig.misc
 import iblrig
 
 log = setup_logger("iblrig", level='INFO')
@@ -65,11 +66,12 @@ class Session(BpodMixin, BaseSession):
 
         # now relate the loaded sounds to the sequence table
         self.sequence_table = self.sequence_table.merge(self.df_sounds, left_on='sound_name', right_on='names', how='left')
-        assert np.sum(np.isnan(self.sequence_table["harp_indices"])) == 0, f"Some sound files are missing from {self.task_params.FOLDER_SOUNDS}"
+        assert np.sum(np.isnan(self.sequence_table["harp_indices"])) == 0,\
+            f"Some sound files are missing from {self.task_params.FOLDER_SOUNDS}"
         #  this contains the actual delay for the state machine: sound duration + delay + sequence change delay
         self.sequence_table['state_delay'] = (
             self.sequence_table['delay'] +
-            np.r_[np.diff(self.sequence_table['sequence']), 0] *  self.task_params.SEQUENCE_CHANGE_DELAY
+            np.r_[np.diff(self.sequence_table['sequence']), 0] * self.task_params.SEQUENCE_CHANGE_DELAY
         )
 
     def start_hardware(self):
@@ -136,6 +138,6 @@ class Session(BpodMixin, BaseSession):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    kwargs = iblrig.misc.get_task_runner_argument_parser()
+    kwargs = iblrig.misc.get_task_arguments()
     sess = Session(**kwargs)
     sess.run()
