@@ -1,16 +1,17 @@
 from pathlib import Path
+import json
+
 import numpy as np
 import pandas as pd
+
 from pybpodapi.protocol import StateMachine
 from iblrig.base_tasks import BaseSession, BpodMixin
 import iblrig.sound
-from iblutil.util import Bunch, setup_logger
+from iblutil.util import Bunch
 from iblrig.hardware import sound_device_factory
 
 import iblrig.misc
 import iblrig
-
-log = setup_logger("iblrig", level='INFO')
 
 task_parameter_file = Path(iblrig.__file__).parent.joinpath("base_choice_world_params.yaml")
 
@@ -37,7 +38,6 @@ class Session(BpodMixin, BaseSession):
         }))
         self.df_sounds['bpod_action'] = ""
         self.all_sounds = []
-
         for i, fsound in enumerate(files_sounds):
             s = np.fromfile(fsound, dtype=np.int32).astype(np.float32)
             s = s.reshape(int(s.size / 2), 2).astype(np.float32) / 2 ** 31
@@ -45,11 +45,6 @@ class Session(BpodMixin, BaseSession):
             self.all_sounds.append(s)
             sn = self.df_sounds.at[i, 'names']
             self.df_sounds.at[i, 'bin_duration'] = s.shape[0] / self.sound['samplerate']
-            f'play_{sn}'
-            bpod_message = [ord("P"), self.df_sounds.at[i, 'harp_indices']]
-            self.bpod.actions.update({
-                f'play_{sn}': ('Serial3', self.bpod._define_message(self.bpod.sound_card, bpod_message)),
-            })
             self.df_sounds.at[i, 'bpod_action'] = f'play_{sn}'
         # now relate the loaded sounds to the sequence table
         self.sequence_table = self.sequence_table.merge(self.df_sounds, left_on='sound_name', right_on='names',
@@ -74,14 +69,25 @@ class Session(BpodMixin, BaseSession):
             indexes=list(self.df_sounds['harp_indices']),
             sample_rate=self.sound['samplerate'],
         )
+        # now we can register the sounds in the bpod actions
+        sound_table = self.sequence_table.groupby('sound_name').agg(
+            harp_indices=pd.NamedAgg(column='harp_indices', aggfunc='first'),
+            bpod_action=pd.NamedAgg(column='bpod_action', aggfunc='first'),
+        )
+        for i, sound in sound_table.iterrows():
+            bpod_message = [ord("P"), sound.harp_indices]
+            bpod_action = ('Serial3', self.bpod._define_message(self.bpod.sound_card, bpod_message))
+            self.bpod.actions.update({f'play_{sound.name}': bpod_action})
 
     def start_hardware(self):
         self.start_mixin_bpod()
         self.start_mixin_sound()
 
+
     def get_state_machine(self, sequence):
         sma = StateMachine(self.bpod)
-        for i, rec in self.sequence_table[self.sequence_table['sequence'] == sequence].iterrows():
+        table = self.sequence_table[self.sequence_table['sequence'] == sequence].reindex()
+        for i, rec in table.iterrows():
             # the first state triggers the sound and detects the upgoing front to move
             sma.add_state(
                 state_name=f"trigger_sound_{i}",
@@ -115,33 +121,42 @@ class Session(BpodMixin, BaseSession):
             state_timer=0.0,
             state_change_conditions={"Tup": "exit"},
         )
-        return sma
+        return sma, table
 
     def _run(self):
-
         # ideally we should populate the sound duration from the files read
-        log.info("Sending spacers to BNC ports")
+        self.logger.info("Sending spacers to BNC ports")
         self.send_spacers()
-        log.info("Start the oddball protocol sound state machine")
+        self.logger.info("Start the oddball protocol sound state machine")
 
+        all_tables = []
         for seq in self.sequence_table['sequence'].unique():
             for _ in range(self.task_params.REPEAT_SEQUENCE):
-                log.info(f"Running sequence {seq}")
-                sma = self.get_state_machine(seq)
+                self.logger.info(f"Running sequence {seq}")
+                sma, table = self.get_state_machine(seq)
                 self.bpod.send_state_machine(sma)
                 self.bpod.run_state_machine(sma)
                 bpod_data = self.bpod.session.current_trial.export()
-
-        # this fails when BNC is not connected
-        self.sequence_table['bpod_timestamp'] = np.NaN
-        bnc_high = bpod_data['Events timestamps'].get('BNC2High', [])
-        n_bnc_high = len(bnc_high)
-        n_bnc_low = len(bpod_data['Events timestamps'].get('BNC2Low', []))
-        if not (n_bnc_high == n_bnc_low == self.sequence_table.shape[0]):
-            log.warning("BNC2High and BNC2Low do not match the number of sounds played, check the BNC connection"
-                        "from the sound card to the TTL I/O In2 port on the Bpod")
-        self.sequence_table['bpod_timestamp'] = bnc_high
-        self.sequence_table.to_parquet(self.paths.SESSION_RAW_DATA_FOLDER.joinpath('_iblrig_oddBallSoundsTable.pqt'))
+                # this fails when BNC is not connected
+                table['bpod_timestamp'] = np.NaN
+                bnc_high = bpod_data['Events timestamps'].get('BNC2High', [])
+                n_bnc_high = len(bnc_high)
+                n_bnc_low = len(bpod_data['Events timestamps'].get('BNC2Low', []))
+                if not (n_bnc_high == n_bnc_low == table.shape[0]):
+                    self.logger.warning("BNC2High and BNC2Low do not match the number of sounds played, check the BNC connection"
+                                "from the sound card to the TTL I/O In2 port on the Bpod")
+                table['bpod_timestamp'] = bnc_high
+                all_tables.append(table)
+                # Dump and save the bpod trial
+                with open(self.paths['DATA_FILE_PATH'], 'a') as fp:
+                    fp.write(json.dumps(dict(behavior_data=bpod_data)) + '\n')
+                if self.paths.SESSION_FOLDER.joinpath('.stop').exists():
+                    break
+            if self.paths.SESSION_FOLDER.joinpath('.stop').exists():
+                self.paths.SESSION_FOLDER.joinpath('.stop').unlink()
+                self.logger.critical('Graceful exit')
+                break
+        self.sequence_table.to_parquet(self.paths.SESSION_RAW_DATA_FOLDER.joinpath('_plau_oddBallSoundsTable.pqt'))
 
 
 if __name__ == "__main__":  # pragma: no cover
