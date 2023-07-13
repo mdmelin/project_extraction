@@ -1,7 +1,6 @@
 """Extraction pipeline for Alejandro's learning_witten_dop project, task protocol _iblrig_tasks_FPChoiceWorld6.4.2"""
 import logging
 from inspect import getmembers, isfunction
-from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -10,14 +9,11 @@ from one.alf.exceptions import ALFObjectNotFound
 from one.alf.spec import is_session_path
 from iblutil.util import Bunch
 
-from ibllib.pipes import tasks
 from ibllib.io.extractors.fibrephotometry import FibrePhotometry as BaseFibrePhotometry
 from ibllib.io.extractors.fibrephotometry import DAQ_CHMAP, NEUROPHOTOMETRICS_LED_STATES
 from ibllib.pipes.photometry_tasks import FibrePhotometryPreprocess as PhotometryPreprocess
 from ibllib.io import raw_daq_loaders
 from ibllib.qc.base import QC
-from ibllib.pipes.training_preprocessing import (
-    TrainingRegisterRaw, TrainingAudio, TrainingTrials, TrainingDLC, TrainingStatus, TrainingVideoCompress)
 from scipy import interpolate
 
 CHANNELS = pd.DataFrame.from_dict(NEUROPHOTOMETRICS_LED_STATES)
@@ -95,13 +91,12 @@ class FibrePhotometryQC(QC):
             metrics = {f'_roi{i}_' + k[6:]: out for i, out in output}
             self.metrics.update(metrics)
 
-
     def check_photobleach(self, n_frames=1000, threshold=0.8):
 
         qcs = []
         for iD, d in enumerate(self.data['green'].T):
-            first = np.mean(d[100:100+n_frames])
-            last = np.mean(d[-100+n_frames:-100])
+            first = np.mean(d[100:100 + n_frames])
+            last = np.mean(d[-100 + n_frames:-100])
             qcs.append((last / first) > threshold)
 
         return qcs
@@ -129,17 +124,17 @@ class FibrePhotometryQC(QC):
 
 
 def check_photobleaching_qc(raw_signal, frame_window=1000):
-        init = raw_signal[100:1100].mean()
-        last = raw_signal[-1100:-100].mean()  # 100 is to avoid init and end artifacts
-        qc = 1 * ((last / init) > 0.8)
-        return qc
+    init = raw_signal[100:1100].mean()
+    last = raw_signal[-1100:-100].mean()  # 100 is to avoid init and end artifacts
+    qc = 1 * ((last / init) > 0.8)
+    return qc
 
 
 def dff_qc(dff, thres=0.05, frame_interval=40):
-        separation_min = 2000 / frame_interval  # 2 seconds separation (10 min)
-        peaks = np.where(dff > 0.05)[0]
-        qc = 1 * (len(np.where(np.diff(peaks) > separation_min)[0]) > 5)
-        return qc
+    separation_min = 2000 / frame_interval  # 2 seconds separation (10 min)
+    peaks = np.where(dff > 0.05)[0]
+    qc = 1 * (len(np.where(np.diff(peaks) > separation_min)[0]) > 5)
+    return qc
 
 
 class FibrePhotometry(BaseFibrePhotometry):
@@ -187,8 +182,8 @@ class FibrePhotometry(BaseFibrePhotometry):
         first_470 = frame_470[0]
         diff_470 = np.diff(frame_470)[0]
         fr_start = np.where(fp_data['FrameCounter'].values == processed.iloc[0]['FrameCounter'])[0][0] - first_470
-        fr_end = np.where(fp_data['FrameCounter'].values == processed.iloc[-1]['FrameCounter'])[0][0] + (
-                    diff_470 - first_470)
+        fr_end = (np.where(fp_data['FrameCounter'].values == processed.iloc[-1]['FrameCounter'])[0][0] +
+                  (diff_470 - first_470))
         include[fr_start:fr_end] = 1
         out_df['include'] = include
 
@@ -314,26 +309,3 @@ class FibrePhotometryPreprocess(PhotometryPreprocess):
         _, out_files = FibrePhotometry(self.session_path, collection=self.device_collection).extract(
             regions=self.regions, path_out=self.session_path.joinpath('alf', 'photometry'), save=True)
         return out_files
-
-
-class BiasedFibrephotometryPipeline(tasks.Pipeline):
-    label = __name__
-
-    def __init__(self, session_path=None, **kwargs):
-        super().__init__(session_path, **kwargs)
-        tasks = OrderedDict()
-        self.session_path = session_path
-        # level 0
-        tasks['TrainingRegisterRaw'] = TrainingRegisterRaw(self.session_path)
-        tasks['TrainingTrials'] = TrainingTrials(self.session_path)
-        tasks['TrainingVideoCompress'] = TrainingVideoCompress(self.session_path)
-        tasks['TrainingAudio'] = TrainingAudio(self.session_path)
-        # level 1
-        tasks['BiasedFibrePhotometry'] = FibrePhotometryPreprocess(self.session_path, parents=[tasks['TrainingTrials']])
-        tasks['TrainingStatus'] = TrainingStatus(self.session_path, parents=[tasks['TrainingTrials']])
-        tasks['TrainingDLC'] = TrainingDLC(
-            self.session_path, parents=[tasks['TrainingVideoCompress']])
-        self.tasks = tasks
-
-
-__pipeline__ = BiasedFibrephotometryPipeline

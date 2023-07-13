@@ -33,7 +33,6 @@ class TestEphysPassiveOptoTrials(base.IntegrationTest):
         assert set(trials.keys()) == set(['laserIntervals', 'intervals', 'laserProbability'])
         assert np.all(trials['laserProbability'] == .8)
 
-
     def tearDown(self) -> None:
         shutil.rmtree(self.session_path.joinpath('alf'), ignore_errors=True)
 
@@ -43,5 +42,3 @@ class TestEphysPassiveOptoTrials(base.IntegrationTest):
 # session_path = one.eid2path(eid)
 # task = EphysPassiveOptoTrials(session_path=session_path, location='remote', one=one)
 # task.run()
-
-
