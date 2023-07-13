@@ -35,10 +35,3 @@ class TestEphysPassiveOptoTrials(base.IntegrationTest):
 
     def tearDown(self) -> None:
         shutil.rmtree(self.session_path.joinpath('alf'), ignore_errors=True)
-
-
-# one = ONE()
-# eid = '51751156-6b97-48f7-8482-b695f8cab732'
-# session_path = one.eid2path(eid)
-# task = EphysPassiveOptoTrials(session_path=session_path, location='remote', one=one)
-# task.run()

@@ -1,0 +1,6 @@
+'HARP_AMPLITUDE': 0.0272   # calibrated sound card amplitude (same as choice world sessions)
+'HARP_DUMP_TONE_AMPLITUDE': 0.5  # amplitude at which the sounds have been written (by harp software ad float32)
+'FOLDER_SOUNDS': null # defaults to ./tones
+'SEQUENCE_FILE': null # defaults to ./sound_sequence.csv
+'SEQUENCE_CHANGE_DELAY': 2  # for each sequence shift, wait this long before starting the next sequence
+'REPEAT_SEQUENCE': 5  # number of times to repeat each sequence
