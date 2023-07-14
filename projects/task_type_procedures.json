@@ -1,3 +1,4 @@
 {"training_bandit":  "Behavior training/tasks",
-  "ephys_bandit": "Ephys recording with acute probe(s)"
+  "ephys_bandit": "Ephys recording with acute probe(s)",
+  "biased_fibrephotometry": "Fiber photometry"
 }
