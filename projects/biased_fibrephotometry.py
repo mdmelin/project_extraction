@@ -275,7 +275,7 @@ class FibrePhotometry(BaseFibrePhotometry):
         daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'ttl_duration'] = \
             daq_data.loc[daq_data['ttl_off'] == 1].index - daq_data.loc[daq_data['ttl_on'] == 1].index
         # Valve and error tones have pulses > 100
-        daq_data.loc[daq_data['ttl_duration'] > 100, 'feedback_times'] = 1
+        daq_data.loc[daq_data['ttl_duration'] > 105, 'feedback_times'] = 1
 
         n_daq_trials = (daq_data['feedback_times'] == 1).sum()
         if n_daq_trials == trials['feedback_times'].size:
