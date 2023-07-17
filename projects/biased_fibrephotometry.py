@@ -254,6 +254,8 @@ class FibrePhotometry(BaseFibrePhotometry):
         mask = state.isin(CHANNELS['L470'])
         if ttl_interval == 40:
             frame_number = fp_data['FrameCounter'][mask]
+        elif ttl_interval == 20:
+            frame_number = fp_data['FrameCounter'][mask]
         elif ttl_interval == 10:
             frame_number = fp_data['FrameCounter']
 
