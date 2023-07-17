@@ -3,9 +3,10 @@ import numpy as np
 import one.alf.io as alfio
 from one.api import ONE
 from ci.tests import base
+import unittest
 
-from project_extraction.projects.training_bandit import extract_all as training_extract_all
-from project_extraction.projects.ephys_bandit import extract_all as ephys_extract_all
+from projects.training_bandit import extract_all as training_extract_all
+from projects.ephys_bandit import extract_all as ephys_extract_all
 
 
 class TestTrainingBanditTrials(base.IntegrationTest):
@@ -33,6 +34,7 @@ class TestTrainingBanditTrials(base.IntegrationTest):
 
 class TestEphysBanditTrials(base.IntegrationTest):
 
+    @unittest.skip("Skip FTP upload test")
     def setUp(self) -> None:
         self.one_offline = ONE(mode='local')
         self.session_path = self.data_path.joinpath("personal_projects/ephys_bandit/dop_38/2021-12-13/002/")
