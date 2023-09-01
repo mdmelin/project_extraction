@@ -32,7 +32,8 @@ setup(
     long_description_content_type='text/markdown',
     author='IBL Staff',
     url="https://www.internationalbrainlab.com/",
-    packages=find_packages(include=['projects', 'projects.*']),  # same as name
+    packages=find_packages(include=['projects', 'projects.*', 'iblrig_custom_task',
+                                    'iblrig_custom_task.*']),  # same as name
     include_package_data=True,
     # external packages as dependencies
     install_requires=require,
