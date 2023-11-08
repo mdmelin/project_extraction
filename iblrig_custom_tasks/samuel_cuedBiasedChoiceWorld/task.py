@@ -1,11 +1,17 @@
 import numpy as np
+import pandas as pd
 from pybpodapi.protocol import StateMachine
 
 import iblrig.misc
 from iblrig.base_choice_world import BiasedChoiceWorldSession
 from iblrig.hardware import SOFTCODE
+from iblutil.util import setup_logger
+
+log = setup_logger(__name__)
 
 INTERACTIVE_DELAY = 1.0
+NTRIALS_INIT = 2000
+
 
 class Session(BiasedChoiceWorldSession):
     
@@ -13,7 +19,7 @@ class Session(BiasedChoiceWorldSession):
     extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus'] #SP not sure what extractors to put here
 
     def __init__(self, *args, delay_secs=0, **kwargs): #SP _init_ should be the same as biasedChoiceWorld, so should it be specified?
-        super(ChoiceWorldSession, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.task_params["SESSION_DELAY_START"] = delay_secs
         # init behaviour data
         self.movement_left = self.device_rotary_encoder.THRESHOLD_EVENTS[
