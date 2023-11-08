@@ -16,7 +16,7 @@ NTRIALS_INIT = 2000
 class Session(BiasedChoiceWorldSession):
     
     protocol_name = "samuel_cuedBiasedChoiceWorld"
-    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus'] #SP not sure what extractors to put here
+    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']  # SP not sure what extractors to put here
 
     def __init__(self, *args, delay_secs=0, **kwargs): #SP _init_ should be the same as biasedChoiceWorld, so should it be specified?
         super().__init__(**kwargs)
@@ -88,7 +88,7 @@ class Session(BiasedChoiceWorldSession):
             state_timer=self.quiescent_period,
             output_actions=[],
             state_change_conditions={
-                "Tup": "stim_on",
+                "Tup": "play_tone",
                 self.movement_left: "reset_rotary_encoder",
                 self.movement_right: "reset_rotary_encoder",
             },
@@ -97,29 +97,30 @@ class Session(BiasedChoiceWorldSession):
         # SP how can we make sure the delay between play_tone and stim_on is always exactly 1s?
         sma.add_state(
             state_name="play_tone",
-            state_timer=0.1, #SP is this necessary??
+            state_timer=0.1,  # SP is this necessary??
             output_actions=[self.bpod.actions.play_tone],
             state_change_conditions={
                 "Tup": "interactive_delay",
-                "BNC1High": "interactive_delay",
-                "BNC1Low": "interactive_delay",
+                "BNC2High": "interactive_delay",
             },
         )
         # this will add a delay between auditory cue and visual stimulus
+        # this needs to be precise and accurate based on the parameter
         sma.add_state(
             state_name="interactive_delay",
             state_timer=self.task_params.INTERACTIVE_DELAY,
             output_actions=[],
             state_change_conditions={"Tup": "stim_on"},
         )
-
+        # show stimulus, move on to next state if a frame2ttl is detected, with a time-out of 0.1s
         sma.add_state(
             state_name="stim_on",
-            state_timer=0.1, #SP is this necessary??
+            state_timer=0.1,
             output_actions=[self.bpod.actions.bonsai_show_stim],
             state_change_conditions={
                 "Tup": "reset2_rotary_encoder",
-                "BNC2High": "reset2_rotary_encoder",
+                "BNC1High": "reset2_rotary_encoder",
+                "BNC1Low": "reset2_rotary_encoder",
             },
         )
         sma.add_state(
