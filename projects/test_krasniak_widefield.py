@@ -3,6 +3,7 @@ import shutil
 import unittest.mock
 
 import numpy as np
+from one.api import ONE
 from iblutil.util import Bunch
 from projects.krasniak_widefield import WidefieldSyncKrasniak
 
@@ -18,6 +19,7 @@ class TestWidefieldSync(base.IntegrationTest):
     def setUp(self):
         self.session_path = self.default_data_root().joinpath(
             'widefield', 'widefieldChoiceWorld', 'CSK-im-011', '2021-07-29', '001')
+        self.one = ONE(**base.TEST_DB, mode='local')
         if not self.session_path.exists():
             return
         self.alf_folder = self.session_path.joinpath('alf', 'widefield')
@@ -29,7 +31,7 @@ class TestWidefieldSync(base.IntegrationTest):
 
     def test_sync(self):
 
-        wf = WidefieldSyncKrasniak(self.session_path)
+        wf = WidefieldSyncKrasniak(self.session_path, one=self.one)
         status = wf.run()
         assert status == 0
 
@@ -53,7 +55,7 @@ class TestWidefieldSync(base.IntegrationTest):
         wiring_file.rename(bk_wiring_file)
         self.addCleanup(bk_wiring_file.rename, wiring_file)
 
-        wf = WidefieldSyncKrasniak(self.session_path)
+        wf = WidefieldSyncKrasniak(self.session_path, one=self.one)
         status = wf.run()
         assert status == -1
         assert "WidefieldWiringException" in wf.log

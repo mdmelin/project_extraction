@@ -109,8 +109,8 @@ def _extract_all(session_path, save=True, bpod_trials=None, settings=None):
     settings = settings or rawio.load_settings(session_path)
     _logger.info(f'{extractor_type} session on {settings["PYBPOD_BOARD"]}')
 
-    if settings is None or settings['IBLRIG_VERSION_TAG'] == '':
-        settings = {'IBLRIG_VERSION_TAG': '100.0.0'}
+    if settings is None or settings['IBLRIG_VERSION'] == '':
+        settings = {'IBLRIG_VERSION': '100.0.0'}
 
     # check that the extraction works for both the shaping 0-100 and the other one
     base = [bt.BanditRepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
