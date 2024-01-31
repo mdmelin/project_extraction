@@ -102,6 +102,9 @@ class VideoSession(BaseSession, BpodMixin):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if self.hardware_settings.get('MAIN_SYNC', False):
+            raise NotImplementedError('Recording frame2ttl on Bpod not yet implemented')
+        self.paths.DATA_FILE_PATH = self.paths.DATA_FILE_PATH.with_name('_sp_taskData.raw.pqt')
         self.video = None
         self.trial_num = -1
         columns = ['intervals_0', 'intervals_1']
@@ -111,7 +114,7 @@ class VideoSession(BaseSession, BpodMixin):
         self.logger.info('Saving data')
         if self.video:
             data = pd.concat([self.data, pd.DataFrame.from_dict(self.video.events)], axis=1)
-            data.to_parquet(self.paths.DATA_FILE_PATH.with_suffix('.pqt'))
+            data.to_parquet(self.paths.DATA_FILE_PATH)
         self.paths.SESSION_FOLDER.joinpath('transfer_me.flag').touch()
 
     def start_hardware(self):
