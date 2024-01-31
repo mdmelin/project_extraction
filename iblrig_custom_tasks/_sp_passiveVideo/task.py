@@ -134,7 +134,7 @@ class VideoSession(BaseSession, BpodMixin):
         """Set Bpod BNC1 output state."""
         if isinstance(val, bool):
             val = 255 if val else 128
-        self.bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC1, channel_number=1, value=val)
+        self.bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC, channel_number=1, value=val)
 
     def _run(self):
         """This is the method that runs the video."""
