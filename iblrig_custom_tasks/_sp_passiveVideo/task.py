@@ -95,7 +95,7 @@ class Player:
             return ends[repeat]
 
 
-class VideoSession(BaseSession, BpodMixin):
+class Session(BaseSession, BpodMixin):
     """Play a single video."""
 
     protocol_name = '_sp_passiveVideo'
@@ -167,6 +167,6 @@ class VideoSession(BaseSession, BpodMixin):
 
 if __name__ == '__main__':  # pragma: no cover
     # python .\iblrig_tasks\_sp_passiveVideo\task.py --subject mysubject
-    kwargs = iblrig.misc.get_task_arguments(parents=[VideoSession.extra_parser()])
-    sess = VideoSession(**kwargs)
+    kwargs = iblrig.misc.get_task_arguments(parents=[Session.extra_parser()])
+    sess = Session(**kwargs)
     sess.run()
