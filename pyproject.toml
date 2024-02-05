@@ -1,10 +1,10 @@
 [build-system]
-requires      = [ "setuptools>=64" ]
+requires      = [ "setuptools>=64", "wheel" ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name            = "project_extraction"
-version         = "0.1.1"
+version         = "0.1.0"
 description     = "Custom extractors for satellite tasks"
 dynamic         = [ "readme" ]
 keywords        = [ "IBL", "neuro-science" ]
@@ -12,14 +12,11 @@ requires-python = "~=3.10"
 license         = { file = "LICENSE" }
 dependencies    = [ "iblrig" ]
 
-[tool.setuptools]
-include-package-data = true
-
 [tool.setuptools.dynamic]
 readme = { file = "README.md", content-type = "text/markdown" }
 
-[tool.setuptools.packages.find]
-where = [ "iblrig_custom_tasks" ]
+[tool.setuptools.packages]
+find = {}
 
 [tool.setuptools.package-data]
 project_extraction = [ "*.csv", "*.yaml" ]
