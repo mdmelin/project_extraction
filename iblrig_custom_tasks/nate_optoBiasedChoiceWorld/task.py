@@ -15,6 +15,7 @@ from pybpodapi.protocol import StateMachine
 
 from iblrig.base_choice_world import BiasedChoiceWorldSession
 from iblutil.util import setup_logger
+import iblrig
 
 log = setup_logger(__name__)
 
@@ -33,12 +34,12 @@ class OptoStateMachine(StateMachine):
 
     def __init__(self, bpod, is_opto_stimulation=False, states_opto_ttls=None):
         super().__init__(bpod)
-        self.is_opto_trial = is_opto_stimulation
+        self.is_opto_stimulation = is_opto_stimulation
         self.states_opto_ttls = states_opto_ttls or []
 
     def add_state(self, **kwargs):
         if self.is_opto_stimulation and kwargs['state_name'] in self.states_opto_ttls:
-            kwargs.output_actions.append(('BNC2', 255))
+            kwargs['output_actions'].append(('BNC2', 255))
         super().add_state(**kwargs)
 
 
@@ -55,6 +56,9 @@ class Session(BiasedChoiceWorldSession):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+        print(probability_opto_stim)
+        print(contrast_set_probability_type)
+        print(opto_stim_states)
         self.task_params['CONTRAST_SET_PROBABILITY_TYPE'] = contrast_set_probability_type
         self.task_params['OPTO_STIM_STATES'] = opto_stim_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
@@ -95,14 +99,19 @@ class Session(BiasedChoiceWorldSession):
             choices=['skew_zero', 'uniform'],
             help=f'probability type for contrast set (default: {DEFAULTS["CONTRAST_SET_PROBABILITY_TYPE"]})',
         )
-        # TODO: Support list of strings
-        # parser.add_argument(
-        #     '--opto_stim_states',
-        #     option_strings=['--opto_stim_states'],
-        #     dest='opto_stim_states',
-        #     default=DEFAULTS['OPTO_STIM_STATES'],
-        #     nargs='+',
-        #     type=str,
-        #     help=f'list of the state machine states where opto stim should be delivered',
-        # )
+        parser.add_argument(
+            '--opto_stim_states',
+            option_strings=['--opto_stim_states'],
+            dest='opto_stim_states',
+            default=DEFAULTS['OPTO_STIM_STATES'],
+            nargs='+',
+            type=str,
+            help=f'list of the state machine states where opto stim should be delivered',
+        )
         return parser
+
+
+if __name__ == '__main__':  # pragma: no cover
+    kwargs = iblrig.misc.get_task_arguments(parents=[Session.extra_parser()])
+    sess = Session(**kwargs)
+    sess.run()

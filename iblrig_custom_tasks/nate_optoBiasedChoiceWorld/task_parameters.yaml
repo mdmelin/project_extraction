@@ -4,4 +4,4 @@
   - no_go
   - error
   - reward
-'PROBABILITY_OPTO_STIM': 0.7  # probability of optogenetic stimulation
+'PROBABILITY_OPTO_STIM': 0.2  # probability of optogenetic stimulation
