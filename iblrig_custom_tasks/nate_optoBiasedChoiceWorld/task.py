@@ -1,7 +1,8 @@
 """
 This task is a replica of BiasedChoiceWorldSession with the addition of optogenetic stimulation
 An `opto_stimulation` column is added to the trials_table, which is a boolean array of length NTRIALS_INIT
-The PROBABILITY_OPTO_STIMULATION parameter is used to determine the probability of optogenetic stimulation for each trial
+The PROBABILITY_OPTO_STIMULATION parameter is used to determine the probability of optogenetic stimulation
+for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from pybpodapi.protocol import StateMachine
-
+from iblrig.base_tasks import BaseSession, BpodMixin
 from iblrig.base_choice_world import BiasedChoiceWorldSession
 from iblutil.util import setup_logger
 import iblrig
@@ -41,6 +42,19 @@ class OptoStateMachine(StateMachine):
         if self.is_opto_stimulation and kwargs['state_name'] in self.states_opto_ttls:
             kwargs['output_actions'].append(('BNC2', 255))
         super().add_state(**kwargs)
+
+
+class ZapitMixin(BpodMixin):
+
+    def zapit_start_laser(self):
+        self.logger.critical('zap')
+
+    def zapit_stop_laser(self):
+        self.logger.critical('a plus zap')
+
+    def softcode_dictionary(self):
+        softcode_dictionary = super().softcode_dictionary()
+        # Todo register softcodes in Bpod actions
 
 
 class Session(BiasedChoiceWorldSession):

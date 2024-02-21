@@ -8,15 +8,19 @@ from pathlib import Path
 from collections import defaultdict
 import logging
 
-import vlc
 import pandas as pd
 from pybpodapi.protocol import Bpod
 
 import iblrig.misc
-from iblrig.base_tasks import BaseSession, BpodMixin
-
+from iblrig.base_tasks import BpodMixin
 
 _logger = logging.getLogger(__name__)
+
+# this allows the CI and automated tests to import the file and make sure it is valid without having vlc
+try:
+    import vlc
+except ModuleNotFoundError:
+    _logger.error(f'VLC not installed. Please install VLC to use this task. {__file__}')
 
 
 class Player:
@@ -95,7 +99,7 @@ class Player:
             return ends[repeat]
 
 
-class Session(BaseSession, BpodMixin):
+class Session(BpodMixin):
     """Play a single video."""
 
     protocol_name = '_sp_passiveVideo'
