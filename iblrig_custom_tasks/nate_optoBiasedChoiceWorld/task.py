@@ -7,21 +7,23 @@ for each trial
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
 
-import numpy as np
-import yaml
 from pathlib import Path
 from typing import Literal
 
-from pybpodapi.protocol import StateMachine
-from iblrig.base_choice_world import BiasedChoiceWorldSession
-from iblutil.util import setup_logger
+import numpy as np
+import yaml
+
 import iblrig
+from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
+from iblutil.util import setup_logger
+from pybpodapi.protocol import StateMachine
 
 log = setup_logger(__name__)
 
 INTERACTIVE_DELAY = 1.0
 NTRIALS_INIT = 2000
-SOFTCODE_STOP_ZAPIT = 5
+SOFTCODE_STOP_ZAPIT = max(SOFTCODE).value + 1
+SOFTCODE_FIRE_ZAPIT = max(SOFTCODE).value + 2
 
 # read defaults from task_parameters.yaml
 with open(Path(__file__).parent.joinpath('task_parameters.yaml')) as f:
@@ -33,17 +35,27 @@ class OptoStateMachine(StateMachine):
     This class just adds output TTL on BNC2 for defined states
     """
 
-    def __init__(self, bpod, is_opto_stimulation=False, states_opto_ttls=None, states_opto_stop=None):
+    def __init__(
+        self,
+        bpod,
+        is_opto_stimulation=False,
+        states_opto_ttls=None,
+        states_opto_stop=None,
+    ):
         super().__init__(bpod)
         self.is_opto_stimulation = is_opto_stimulation
         self.states_opto_ttls = states_opto_ttls or []
+        self.states_opto_stop = states_opto_stop or []
 
     def add_state(self, **kwargs):
         if self.is_opto_stimulation:
             if kwargs['state_name'] in self.states_opto_ttls:
-                kwargs['output_actions'].append(('BNC2', 255))
-            elif kwargs['state_name'] in self.states_opto_ttls:
-                kwargs['output_actions'].append(('SoftCode', SOFTCODE_STOP_ZAPIT))
+                kwargs['output_actions'] += [
+                    ('SoftCode', SOFTCODE_FIRE_ZAPIT),
+                    ('BNC2', 255),
+                ]
+            elif kwargs['state_name'] in self.states_opto_stop:
+                kwargs['output_actions'] += [('SoftCode', SOFTCODE_STOP_ZAPIT)]
         super().add_state(**kwargs)
 
 
@@ -68,22 +80,30 @@ class Session(BiasedChoiceWorldSession):
 
         # generates the opto stimulation for each trial
         self.trials_table['opto_stimulation'] = np.random.choice(
-            [0, 1], p=[1 - probability_opto_stim, probability_opto_stim], size=NTRIALS_INIT
+            [0, 1],
+            p=[1 - probability_opto_stim, probability_opto_stim],
+            size=NTRIALS_INIT,
         ).astype(bool)
 
+    def start_hardware(self):
+        super().start_hardware()
         # add the softcodes for the zapit opto stimulation
         soft_code_dict = self.bpod.softcodes
         soft_code_dict.update({SOFTCODE_STOP_ZAPIT: self.zapit_stop_laser})
+        soft_code_dict.update({SOFTCODE_FIRE_ZAPIT: self.zapit_fire_laser})
         self.bpod.register_softcodes(soft_code_dict)
 
-    def zapit_init_laser(self):
-        pass
+    def zapit_arm_laser(self):
+        log.warning('Arming laser')
+        # TODO: insert code for arming the laser here
 
-    def zapit_start_laser_trigger_mode(self):
-        pass
+    def zapit_fire_laser(self):
+        # just logging - actual firing will be triggered by the state machine via TTL
+        log.warning('Firing laser')
 
     def zapit_stop_laser(self):
-        self.logger.critical('a plus zap')
+        log.critical('Stopping laser')
+        # TODO: insert code for stopping the laser here
 
     def _instantiate_state_machine(self, trial_number=None):
         """
@@ -94,7 +114,7 @@ class Session(BiasedChoiceWorldSession):
         is_opto_stimulation = self.trials_table.at[trial_number, 'opto_stimulation']
         # we start the laser waiting for a TTL trigger before sending out the state machine on opto trials
         if is_opto_stimulation:
-            self.zapit_start_laser_trigger_mode()
+            self.zapit_arm_laser()
         return OptoStateMachine(
             self.bpod,
             is_opto_stimulation=is_opto_stimulation,
@@ -130,7 +150,7 @@ class Session(BiasedChoiceWorldSession):
             default=DEFAULTS['OPTO_TTL_STATES'],
             nargs='+',
             type=str,
-            help=f'list of the state machine states where opto stim should be delivered',
+            help='list of the state machine states where opto stim should be delivered',
         )
         parser.add_argument(
             '--opto_stop_states',
@@ -139,7 +159,7 @@ class Session(BiasedChoiceWorldSession):
             default=DEFAULTS['OPTO_STOP_STATES'],
             nargs='+',
             type=str,
-            help=f'list of the state machine states where opto stim should be stopped',
+            help='list of the state machine states where opto stim should be stopped',
         )
         return parser
 
