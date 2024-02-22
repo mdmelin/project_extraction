@@ -6,7 +6,7 @@ for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
-
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -15,10 +15,9 @@ import yaml
 
 import iblrig
 from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
-from iblutil.util import setup_logger
 from pybpodapi.protocol import StateMachine
 
-log = setup_logger(__name__)
+log = logging.getLogger('iblrig.task')
 
 INTERACTIVE_DELAY = 1.0
 NTRIALS_INIT = 2000
@@ -102,7 +101,7 @@ class Session(BiasedChoiceWorldSession):
         log.warning('Firing laser')
 
     def zapit_stop_laser(self):
-        log.critical('Stopping laser')
+        log.warning('Stopping laser')
         # TODO: insert code for stopping the laser here
 
     def _instantiate_state_machine(self, trial_number=None):
