@@ -1,3 +1,8 @@
+"""Template boilerplate code for custom task protocol data extraction.
+
+For an example of how to modify Bpod trials extraction (with either Bpod only or unchanged DAQ time alignment) check out
+'projects.neuromodulators'.  For an example of custom task QC, see 'projects.samuel_cuedBiasedChoiceWorld'.
+"""
 from collections import OrderedDict
 
 from ibllib.pipes.tasks import Pipeline

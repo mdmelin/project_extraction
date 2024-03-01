@@ -1,4 +1,5 @@
 {
   "samuel_cuedBiasedChoiceWorld": "BiasedTrials",
-  "nate_optoBiasedChoiceWorld": "EphysTrials"
+  "nate_optoBiasedChoiceWorld": "EphysTrials",
+  "_iblrig_tasks_neuromodulatorChoiceWorld": "projects.neuromodulators.TrialsTableNeuromodulator"
 }

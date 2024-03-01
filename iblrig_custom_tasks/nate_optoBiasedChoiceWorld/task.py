@@ -45,7 +45,6 @@ class OptoStateMachine(StateMachine):
 
 class Session(BiasedChoiceWorldSession):
     protocol_name = 'nate_optoBiasedChoiceWorld'
-    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']
 
     def __init__(
         self,

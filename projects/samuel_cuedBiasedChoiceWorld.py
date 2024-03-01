@@ -64,7 +64,7 @@ class TaskQC(BaseTaskQC):
 class CuedBiasedTrialsTimeline(ChoiceWorldTrialsTimeline):
     """Behaviour task for aligning cuedBiased task to Timeline."""
 
-    def _run_qc(self, trials_data=None, update=True, QC=TaskQC, **kwargs):
+    def run_qc(self, trials_data=None, update=True, QC=TaskQC, **kwargs):
         """
         Run task QC.
 
@@ -82,13 +82,13 @@ class CuedBiasedTrialsTimeline(ChoiceWorldTrialsTimeline):
         ibllib.qc.base.QC
             The QC object.
         """
-        return super()._run_qc(trials_data=trials_data, update=update, QC=QC)
+        return super().run_qc(trials_data=trials_data, update=update, QC=QC)
 
 
 class CuedBiasedTrials(ChoiceWorldTrialsBpod):
     """Behaviour task for extracting Bpod-only cuedBiased task."""
 
-    def _run_qc(self, trials_data=None, update=True, QC=TaskQC, **kwargs):
+    def run_qc(self, trials_data=None, update=True, QC=TaskQC, **kwargs):
         """
         Run task QC.
 
@@ -106,4 +106,4 @@ class CuedBiasedTrials(ChoiceWorldTrialsBpod):
         ibllib.qc.base.QC
             The QC object.
         """
-        return super()._run_qc(trials_data=trials_data, update=update, QC=QC)
+        return super().run_qc(trials_data=trials_data, update=update, QC=QC)
