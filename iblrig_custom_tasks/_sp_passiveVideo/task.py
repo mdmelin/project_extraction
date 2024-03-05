@@ -7,8 +7,15 @@ import time
 from pathlib import Path
 from collections import defaultdict
 import logging
+import warnings
 
-import vlc
+try:
+    import vlc
+except ModuleNotFoundError:
+    warnings.warn(
+        'Please install extra dependencies for _sp_passiveVideo: '
+        'pip install "project_extraction[_sp_passiveVideo] @ '
+        'git+https://github.com/int-brain-lab/project_extraction.git"', RuntimeWarning)
 import pandas as pd
 from pybpodapi.protocol import Bpod
 

@@ -10,7 +10,9 @@ dynamic         = [ "readme" ]
 keywords        = [ "IBL", "neuro-science" ]
 requires-python = "~=3.10"
 license         = { file = "LICENSE" }
-dependencies    = [ "python-vlc" ]
+
+[project.optional-dependencies]
+_sp_passiveVideo    = [ "python-vlc" ]
 
 [tool.setuptools]
 include-package-data = true
