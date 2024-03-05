@@ -7,3 +7,4 @@ task = Session(subject='toto')
 
 
 assert task.task_params.get('PROBABILITY_OPTO_STIM', None) is not None
+assert any(t.startswith('OptoTrials') for t in task.extractor_tasks or [])
