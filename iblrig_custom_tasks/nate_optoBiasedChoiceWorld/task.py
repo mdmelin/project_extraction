@@ -62,6 +62,11 @@ class Session(BiasedChoiceWorldSession):
         self.task_params['OPTO_STIM_STATES'] = opto_stim_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
 
+        # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
+        is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
+        trials_task = 'OptoTrialsBpod' if is_main_sync else 'OptoTrialsNidq'
+        self.extractor_tasks = ['TrialRegisterRaw', trials_task, 'TrainingStatus']
+
         # generates the opto stimulation for each trial
         self.trials_table['opto_stimulation'] = np.random.choice(
             [0, 1], p=[1 - probability_opto_stim, probability_opto_stim], size=NTRIALS_INIT
@@ -105,7 +110,7 @@ class Session(BiasedChoiceWorldSession):
             default=DEFAULTS['OPTO_STIM_STATES'],
             nargs='+',
             type=str,
-            help=f'list of the state machine states where opto stim should be delivered',
+            help='list of the state machine states where opto stim should be delivered',
         )
         return parser
 

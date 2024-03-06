@@ -1,0 +1,37 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: 'pyproject.toml'
+    - name: Install dependencies
+      run: |
+        pip install --editable .
+        pip install packaging
+    - name: Fetch versions
+      run: |
+        git fetch origin --tags
+        previous_version=$(git describe --tags --match="[0-9]*" origin/main)
+        latest_version=$(pip show project_extraction | awk '/^Version: / {sub("^Version: ", ""); print}')
+        echo "Version tag on main: $previous_version"
+        echo "Version tag on this branch: $latest_version"
+        echo "PREVIOUS_VERSION=$previous_version" >> $GITHUB_ENV
+        echo "LATEST_VERSION=$latest_version" >> $GITHUB_ENV
+    - name: Assert version
+      run: |
+        python <<EOP
+        import sys; from packaging import version
+        sys.exit(int(version.parse("$PREVIOUS_VERSION") >= version.parse("$LATEST_VERSION")))
+        EOP
