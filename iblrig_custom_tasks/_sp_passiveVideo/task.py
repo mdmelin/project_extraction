@@ -14,7 +14,7 @@ try:
 except ModuleNotFoundError:
     warnings.warn(
         'Please install extra dependencies for _sp_passiveVideo: '
-        'pip install "project_extraction[_sp_passiveVideo] @ '
+        'pip install "project_extraction[passiveVideo] @ '
         'git+https://github.com/int-brain-lab/project_extraction.git"', RuntimeWarning)
 import pandas as pd
 from pybpodapi.protocol import Bpod
