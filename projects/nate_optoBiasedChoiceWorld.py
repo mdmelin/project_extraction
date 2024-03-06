@@ -38,21 +38,26 @@ class TrialsOpto(BaseBpodTrialsExtractor):
     save_names = BiasedTrials.save_names + ('_ibl_laserStimulation.intervals.npy',)
 
     def _extract(self, extractor_classes=None, **kwargs) -> dict:
-        assert {'OPTO_STOP_STATES', 'OPTO_TTL_STATES', 'PROBABILITY_OPTO_STIM'} <= set(self.settings)
+        settings = self.settings.copy()
+        if 'OPTO_STIM_STATES' in settings:
+            # It seems older versions did not distinguish start and stop states
+            settings['OPTO_TTL_STATES'] = settings['OPTO_STIM_STATES'][:1]
+            settings['OPTO_STOP_STATES'] = settings['OPTO_STIM_STATES'][1:]
+        assert {'OPTO_STOP_STATES', 'OPTO_TTL_STATES', 'PROBABILITY_OPTO_STIM'} <= set(settings)
         # Get all detected TTLs. These are stored for QC purposes
         self.frame2ttl, self.audio = raw.load_bpod_fronts(self.session_path, data=self.bpod_trials)
         # Extract common biased choice world datasets
         out, _ = run_extractor_classes(
             [BiasedTrials], session_path=self.session_path, bpod_trials=self.bpod_trials,
-            settings=self.settings, save=False, task_collection=self.task_collection)
+            settings=settings, save=False, task_collection=self.task_collection)
 
         # Extract laser dataset
         out['laser_intervals'] = np.full((len(self.bpod_trials), 2), np.nan)
         for i, trial in enumerate(self.bpod_trials):
             states = trial['behavior_data']['States timestamps']
             # Assumes one of these states per trial: takes the timestamp of the first matching state
-            start = next((v[0][0] for k, v in states.items() if k in self.settings['OPTO_TTL_STATES']), np.nan)
-            stop = next((v[0][0] for k, v in states.items() if k in self.settings['OPTO_STOP_STATES']), np.nan)
+            start = next((v[0][0] for k, v in states.items() if k in settings['OPTO_TTL_STATES']), np.nan)
+            stop = next((v[0][0] for k, v in states.items() if k in settings['OPTO_STOP_STATES']), np.nan)
             out['laser_intervals'][i, :] = (start, stop)
 
         return {k: out[k] for k in self.var_names}  # Ensures all datasets present and ordered
