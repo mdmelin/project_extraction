@@ -52,12 +52,13 @@ class TrialsOpto(BaseBpodTrialsExtractor):
             settings=settings, save=False, task_collection=self.task_collection)
 
         # Extract laser dataset
-        out['laser_intervals'] = np.full((len(self.bpod_trials), 2), np.nan)
-        for i, trial in enumerate(self.bpod_trials):
+        laser_intervals = []
+        for trial in filter(lambda t: t['opto_stimulation'], self.bpod_trials):
             states = trial['behavior_data']['States timestamps']
             # Assumes one of these states per trial: takes the timestamp of the first matching state
             start = next((v[0][0] for k, v in states.items() if k in settings['OPTO_TTL_STATES']), np.nan)
             stop = next((v[0][0] for k, v in states.items() if k in settings['OPTO_STOP_STATES']), np.nan)
-            out['laser_intervals'][i, :] = (start, stop)
+            laser_intervals.append((start, stop))
+        out['laser_intervals'] = np.array(laser_intervals, dtype=np.float64)
 
         return {k: out[k] for k in self.var_names}  # Ensures all datasets present and ordered

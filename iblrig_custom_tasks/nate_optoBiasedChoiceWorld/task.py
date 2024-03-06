@@ -110,7 +110,7 @@ class Session(BiasedChoiceWorldSession):
             default=DEFAULTS['OPTO_STIM_STATES'],
             nargs='+',
             type=str,
-            help=f'list of the state machine states where opto stim should be delivered',
+            help='list of the state machine states where opto stim should be delivered',
         )
         return parser
 
