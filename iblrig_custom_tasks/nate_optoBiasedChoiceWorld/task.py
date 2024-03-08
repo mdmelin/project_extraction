@@ -60,7 +60,6 @@ class OptoStateMachine(StateMachine):
 
 class Session(BiasedChoiceWorldSession):
     protocol_name = 'nate_optoBiasedChoiceWorld'
-    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']
 
     def __init__(
         self,
@@ -76,6 +75,11 @@ class Session(BiasedChoiceWorldSession):
         self.task_params['OPTO_TTL_STATES'] = opto_ttl_states
         self.task_params['OPTO_STOP_STATES'] = opto_stop_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
+
+        # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
+        is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
+        trials_task = 'OptoTrialsBpod' if is_main_sync else 'OptoTrialsNidq'
+        self.extractor_tasks = ['TrialRegisterRaw', trials_task, 'TrainingStatus']
 
         # generates the opto stimulation for each trial
         self.trials_table['opto_stimulation'] = np.random.choice(

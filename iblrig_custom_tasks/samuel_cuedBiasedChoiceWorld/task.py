@@ -3,6 +3,7 @@ import pandas as pd
 from pybpodapi.protocol import StateMachine
 
 import iblrig.misc
+from iblrig.path_helper import load_pydantic_yaml, HardwareSettings
 from iblrig.base_choice_world import BiasedChoiceWorldSession
 from iblrig.hardware import SOFTCODE
 from iblutil.util import setup_logger
@@ -14,12 +15,19 @@ NTRIALS_INIT = 2000
 
 
 class Session(BiasedChoiceWorldSession):
-    
-    protocol_name = "samuel_cuedBiasedChoiceWorld"
-    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']  # SP not sure what extractors to put here
 
-    def __init__(self, *args, delay_secs=0, **kwargs): #SP _init_ should be the same as biasedChoiceWorld, so should it be specified?
+    protocol_name = 'samuel_cuedBiasedChoiceWorld'
+
+    def __init__(self, *args, delay_secs=0, **kwargs):  #SP _init_ should be the same as biasedChoiceWorld, so should it be specified?
+        # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
+        hardware_settings = load_pydantic_yaml(HardwareSettings, kwargs.get('file_hardware_settings'))
+        hardware_settings.update(kwargs.get('hardware_settings', {}))
+        is_main_sync = hardware_settings.get('MAIN_SYNC', False)
+        trials_task = 'CuedBiasedTrials' if is_main_sync else 'CuedBiasedTrialsTimeline'
+        self.extractor_tasks = ['TrialRegisterRaw', trials_task, 'TrainingStatus']
+
         super().__init__(**kwargs)
+
         self.task_params["SESSION_DELAY_START"] = delay_secs
         # init behaviour data
         self.movement_left = self.device_rotary_encoder.THRESHOLD_EVENTS[
@@ -203,7 +211,7 @@ class Session(BiasedChoiceWorldSession):
         return sma
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == '__main__':  # pragma: no cover
     kwargs = iblrig.misc.get_task_arguments(parents=[Session.extra_parser()])
     sess = Session(**kwargs)
     sess.run()
