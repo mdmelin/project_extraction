@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 # this allows the CI and automated tests to import the file and make sure it is valid without having vlc
 try:
     import vlc
-except ModuleNotFoundError:
+except (ModuleNotFoundError, FileNotFoundError):
     _logger.error(f'VLC not installed. Please install VLC to use this task. {__file__}')
 
 
