@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from collections import defaultdict
 import logging
+import warnings
 
 import pandas as pd
 from pybpodapi.protocol import Bpod
@@ -19,8 +20,11 @@ _logger = logging.getLogger(__name__)
 # this allows the CI and automated tests to import the file and make sure it is valid without having vlc
 try:
     import vlc
-except (ModuleNotFoundError, FileNotFoundError):
-    _logger.error(f'VLC not installed. Please install VLC to use this task. {__file__}')
+except ModuleNotFoundError:
+    warnings.warn(
+        'Please install extra dependencies for _sp_passiveVideo: '
+        'pip install "project_extraction[passiveVideo] @ '
+        'git+https://github.com/int-brain-lab/project_extraction.git"', RuntimeWarning)
 
 
 class Player:

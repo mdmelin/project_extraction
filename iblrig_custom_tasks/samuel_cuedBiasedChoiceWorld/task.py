@@ -3,7 +3,6 @@ import pandas as pd
 from pybpodapi.protocol import StateMachine
 
 import iblrig.misc
-from iblrig.path_helper import load_pydantic_yaml, HardwareSettings
 from iblrig.base_choice_world import BiasedChoiceWorldSession
 from iblrig.hardware import SOFTCODE
 from iblutil.util import setup_logger
@@ -19,14 +18,12 @@ class Session(BiasedChoiceWorldSession):
     protocol_name = 'samuel_cuedBiasedChoiceWorld'
 
     def __init__(self, *args, delay_secs=0, **kwargs):  #SP _init_ should be the same as biasedChoiceWorld, so should it be specified?
+        super().__init__(**kwargs)
+
         # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
-        hardware_settings = load_pydantic_yaml(HardwareSettings, kwargs.get('file_hardware_settings'))
-        hardware_settings.update(kwargs.get('hardware_settings', {}))
-        is_main_sync = hardware_settings.get('MAIN_SYNC', False)
+        is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
         trials_task = 'CuedBiasedTrials' if is_main_sync else 'CuedBiasedTrialsTimeline'
         self.extractor_tasks = ['TrialRegisterRaw', trials_task, 'TrainingStatus']
-
-        super().__init__(**kwargs)
 
         self.task_params["SESSION_DELAY_START"] = delay_secs
         # init behaviour data

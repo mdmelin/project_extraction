@@ -13,4 +13,4 @@ pip install -e .
 - `projects/task_extractor_map.json` - Map custom task protocols to Bpod trials extractor class
 - `projects/task_type_procedures.json` - Associate Alyx procedures to a custom task protocol
 - `projects/_template.py` - Example for creating a custom Bpod extractor, QC or DAQ sync task
-- `projects/_extraction_tasks.py` - Where to import pipeline tasks so they are readable by ibllib
+- `projects/extraction_tasks.py` - Where to import pipeline tasks so they are readable by ibllib
