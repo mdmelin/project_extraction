@@ -22,3 +22,42 @@ readme = { file = "README.md", content-type = "text/markdown" }
 
 [tool.setuptools.packages]
 find = {}
+
+[tool.ruff]
+ignore = [
+    "PLR0912", # Too many branches
+    "PLR0915", # Too many statements
+    "PLR2004", # Magic value used in comparison, consider replacing with a constant variable
+]
+exclude = [
+    ".mypy_cache",
+    "dist",
+    "docs",
+    "iblrig/gui/*_rc.py",
+    "iblrig/gui/ui_*.py",
+    "venv",
+]
+indent-width = 4
+line-length = 130
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "PL",  # pylint
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = [ "ibl*", "one*", "pybpod*" ]

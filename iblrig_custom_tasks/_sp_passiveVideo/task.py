@@ -9,6 +9,15 @@ from collections import defaultdict
 import logging
 import warnings
 
+import pandas as pd
+from pybpodapi.protocol import Bpod
+
+import iblrig.misc
+from iblrig.base_tasks import BpodMixin
+
+_logger = logging.getLogger(__name__)
+
+# this allows the CI and automated tests to import the file and make sure it is valid without having vlc
 try:
     import vlc
 except ModuleNotFoundError:
@@ -16,14 +25,6 @@ except ModuleNotFoundError:
         'Please install extra dependencies for _sp_passiveVideo: '
         'pip install "project_extraction[passiveVideo] @ '
         'git+https://github.com/int-brain-lab/project_extraction.git"', RuntimeWarning)
-import pandas as pd
-from pybpodapi.protocol import Bpod
-
-import iblrig.misc
-from iblrig.base_tasks import BaseSession, BpodMixin
-
-
-_logger = logging.getLogger(__name__)
 
 
 class Player:
@@ -102,7 +103,7 @@ class Player:
             return ends[repeat]
 
 
-class Session(BaseSession, BpodMixin):
+class Session(BpodMixin):
     """Play a single video."""
 
     protocol_name = '_sp_passiveVideo'
