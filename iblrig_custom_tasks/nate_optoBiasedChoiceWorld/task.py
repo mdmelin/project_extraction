@@ -7,6 +7,7 @@ for each trial
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
 import logging
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -16,13 +17,15 @@ import yaml
 import iblrig
 from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
-import zapit_python_bridge.bridge as zpb
 from importlib import reload
 import random
 
-hZP = zpb.bridge()
+import sys
+sys.path.append('C:\zapit-tcp-bridge\python')
+import Python_TCP_Utils as ptu
+from TCPclient import TCPclient
 
-num_cond = hZP.num_stim_cond()
+num_cond = 52 #will need to change later - is there a function to automatically detect this?>
 
 stim_location_history = []
 
@@ -71,6 +74,9 @@ class Session(BiasedChoiceWorldSession):
     protocol_name = 'nate_optoBiasedChoiceWorld'
     extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']
 
+    
+    
+
     def __init__(
         self,
         *args,
@@ -94,24 +100,40 @@ class Session(BiasedChoiceWorldSession):
         ).astype(bool)
 
     def start_hardware(self):
+        
+        
+        self.client = TCPclient(tcp_port=1488, tcp_ip='127.0.0.1')
+
+        self.client.close() # need to ensure is closed first; currently nowhere that this is defined at end of task!
+        self.client.connect()
         super().start_hardware()
         # add the softcodes for the zapit opto stimulation
         soft_code_dict = self.bpod.softcodes
         soft_code_dict.update({SOFTCODE_STOP_ZAPIT: self.zapit_stop_laser})
         soft_code_dict.update({SOFTCODE_FIRE_ZAPIT: self.zapit_fire_laser})
         self.bpod.register_softcodes(soft_code_dict)
+        
 
     def zapit_arm_laser(self):
-        #log.warning('Arming laser')
+        log.warning('Arming laser')
         #this is where you define the laser stim (i.e., arm the laser)
 
-        current_location_idx = random.randrange(1,int(num_cond))
-        hZP.send_samples(
-            conditionNum=current_location_idx, hardwareTriggered=True, logging=True
-        )
+        self.current_location_idx = random.randrange(1,int(num_cond))
 
-        stim_location_history.append(current_location_idx)
-        
+        #hZP.send_samples(
+        #    conditionNum=current_location_idx, hardwareTriggered=True, logging=True
+        #)
+
+        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(trial_state_command = 1,
+                    arg_keys_dict = {'conditionNum_channel': True, 'laser_channel': True, 
+                                    'hardwareTriggered_channel': True, 'logging_channel': False, 
+                                    'verbose_channel': False},
+                    arg_values_dict = {'conditionNum': self.current_location_idx, 'laser_ON': True, 
+                                        'hardwareTriggered_ON': True, 'logging_ON': False, 
+                                        'verbose_ON': False})
+        response = self.client.send_receive(zapit_byte_tuple)
+        log.warning(response)
+        stim_location_history.append(self.current_location_idx)
 
     def zapit_fire_laser(self):
         # just logging - actual firing will be triggered by the state machine via TTL
@@ -121,7 +143,14 @@ class Session(BiasedChoiceWorldSession):
 
     def zapit_stop_laser(self):
         log.warning('Stopping laser')
-        hZP.stop_opto_stim()
+        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(trial_state_command = 0,
+                    arg_keys_dict = {'conditionNum_channel': True, 'laser_channel': True, 
+                                    'hardwareTriggered_channel': True, 'logging_channel': False, 
+                                    'verbose_channel': False},
+                    arg_values_dict = {'conditionNum': self.current_location_idx, 'laser_ON': True, 
+                                        'hardwareTriggered_ON': False, 'logging_ON': False, 
+                                        'verbose_ON': False})
+        response = self.client.send_receive(zapit_byte_tuple)
 
     def _instantiate_state_machine(self, trial_number=None):
         """
