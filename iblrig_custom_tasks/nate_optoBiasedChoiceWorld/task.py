@@ -6,10 +6,11 @@ for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
-from importlib.util import find_spec
+
 import logging
 import random
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Literal
 
@@ -189,8 +190,7 @@ class Session(BiasedChoiceWorldSession):
             is_opto_stimulation=is_opto_stimulation,
             states_opto_ttls=self.task_params['OPTO_TTL_STATES'],
             states_opto_stop=self.task_params['OPTO_STOP_STATES'],
-            states_mask_ttls=self.task_params['MASK_TTL_STATES']
-            ,
+            states_mask_ttls=self.task_params['MASK_TTL_STATES'],
         )
 
     @staticmethod
