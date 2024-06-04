@@ -6,7 +6,7 @@ for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
-
+from importlib.util import find_spec
 import logging
 import random
 import sys
@@ -21,6 +21,8 @@ from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
 
 sys.path.append('C:\zapit-tcp-bridge\python')
+if find_spec('Python_TCP_Utils') is None:
+    raise ImportError(f'{__file__} requires zapit-tcp-bridge')
 import Python_TCP_Utils as ptu
 from TCPclient import TCPclient
 
@@ -51,11 +53,13 @@ class OptoStateMachine(StateMachine):
         is_opto_stimulation=False,
         states_opto_ttls=None,
         states_opto_stop=None,
+        states_mask_ttls=None,
     ):
         super().__init__(bpod)
         self.is_opto_stimulation = is_opto_stimulation
         self.states_opto_ttls = states_opto_ttls or []
         self.states_opto_stop = states_opto_stop or []
+        self.states_mask_ttls = states_mask_ttls or []
 
     def add_state(self, **kwargs):
         if self.is_opto_stimulation:
@@ -66,6 +70,10 @@ class OptoStateMachine(StateMachine):
                 ]
             elif kwargs['state_name'] in self.states_opto_stop:
                 kwargs['output_actions'] += [('SoftCode', SOFTCODE_STOP_ZAPIT)]
+        if kwargs['state_name'] in self.states_mask_ttls:
+            kwargs['output_actions'] += [
+                ('PWM1', 255),
+            ]
         super().add_state(**kwargs)
 
 
@@ -80,12 +88,14 @@ class Session(BiasedChoiceWorldSession):
         contrast_set_probability_type: Literal['skew_zero', 'uniform'] = DEFAULTS['CONTRAST_SET_PROBABILITY_TYPE'],
         opto_ttl_states: list[str] = DEFAULTS['OPTO_TTL_STATES'],
         opto_stop_states: list[str] = DEFAULTS['OPTO_STOP_STATES'],
+        mask_ttl_states: list[str] = DEFAULTS['MASK_TTL_STATES'],
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.task_params['CONTRAST_SET_PROBABILITY_TYPE'] = contrast_set_probability_type
         self.task_params['OPTO_TTL_STATES'] = opto_ttl_states
         self.task_params['OPTO_STOP_STATES'] = opto_stop_states
+        self.task_params['MASK_TTL_STATES'] = mask_ttl_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
 
         # generates the opto stimulation for each trial
@@ -179,6 +189,8 @@ class Session(BiasedChoiceWorldSession):
             is_opto_stimulation=is_opto_stimulation,
             states_opto_ttls=self.task_params['OPTO_TTL_STATES'],
             states_opto_stop=self.task_params['OPTO_STOP_STATES'],
+            states_mask_ttls=self.task_params['MASK_TTL_STATES']
+            ,
         )
 
     @staticmethod
@@ -219,6 +231,15 @@ class Session(BiasedChoiceWorldSession):
             nargs='+',
             type=str,
             help='list of the state machine states where opto stim should be stopped',
+        )
+        parser.add_argument(
+            '--mask_ttl_states',
+            option_strings=['--mask_ttl_states'],
+            dest='mask_ttl_states',
+            default=DEFAULTS['MASK_TTL_STATES'],
+            nargs='+',
+            type=str,
+            help='list of the state machine states where mask stim should be delivered',
         )
         return parser
 
