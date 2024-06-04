@@ -6,8 +6,10 @@ for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
+
 import logging
-import time
+import random
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -17,15 +19,12 @@ import yaml
 import iblrig
 from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
-from importlib import reload
-import random
 
-import sys
 sys.path.append('C:\zapit-tcp-bridge\python')
 import Python_TCP_Utils as ptu
 from TCPclient import TCPclient
 
-num_cond = 52 #will need to change later - is there a function to automatically detect this?>
+num_cond = 52  # will need to change later - is there a function to automatically detect this?>
 
 stim_location_history = []
 
@@ -74,9 +73,6 @@ class Session(BiasedChoiceWorldSession):
     protocol_name = 'nate_optoBiasedChoiceWorld'
     extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']
 
-    
-    
-
     def __init__(
         self,
         *args,
@@ -100,11 +96,9 @@ class Session(BiasedChoiceWorldSession):
         ).astype(bool)
 
     def start_hardware(self):
-        
-        
         self.client = TCPclient(tcp_port=1488, tcp_ip='127.0.0.1')
 
-        self.client.close() # need to ensure is closed first; currently nowhere that this is defined at end of task!
+        self.client.close()  # need to ensure is closed first; currently nowhere that this is defined at end of task!
         self.client.connect()
         super().start_hardware()
         # add the softcodes for the zapit opto stimulation
@@ -112,44 +106,62 @@ class Session(BiasedChoiceWorldSession):
         soft_code_dict.update({SOFTCODE_STOP_ZAPIT: self.zapit_stop_laser})
         soft_code_dict.update({SOFTCODE_FIRE_ZAPIT: self.zapit_fire_laser})
         self.bpod.register_softcodes(soft_code_dict)
-        
 
     def zapit_arm_laser(self):
         log.warning('Arming laser')
-        #this is where you define the laser stim (i.e., arm the laser)
+        # this is where you define the laser stim (i.e., arm the laser)
 
-        self.current_location_idx = random.randrange(1,int(num_cond))
+        self.current_location_idx = random.randrange(1, int(num_cond))
 
-        #hZP.send_samples(
+        # hZP.send_samples(
         #    conditionNum=current_location_idx, hardwareTriggered=True, logging=True
-        #)
+        # )
 
-        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(trial_state_command = 1,
-                    arg_keys_dict = {'conditionNum_channel': True, 'laser_channel': True, 
-                                    'hardwareTriggered_channel': True, 'logging_channel': False, 
-                                    'verbose_channel': False},
-                    arg_values_dict = {'conditionNum': self.current_location_idx, 'laser_ON': True, 
-                                        'hardwareTriggered_ON': True, 'logging_ON': False, 
-                                        'verbose_ON': False})
+        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(
+            trial_state_command=1,
+            arg_keys_dict={
+                'conditionNum_channel': True,
+                'laser_channel': True,
+                'hardwareTriggered_channel': True,
+                'logging_channel': False,
+                'verbose_channel': False,
+            },
+            arg_values_dict={
+                'conditionNum': self.current_location_idx,
+                'laser_ON': True,
+                'hardwareTriggered_ON': True,
+                'logging_ON': False,
+                'verbose_ON': False,
+            },
+        )
         response = self.client.send_receive(zapit_byte_tuple)
         log.warning(response)
         stim_location_history.append(self.current_location_idx)
 
     def zapit_fire_laser(self):
         # just logging - actual firing will be triggered by the state machine via TTL
-        #this really only triggers a ttl and sends a log entry - no need to plug in code here
+        # this really only triggers a ttl and sends a log entry - no need to plug in code here
         log.warning('Firing laser')
-
 
     def zapit_stop_laser(self):
         log.warning('Stopping laser')
-        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(trial_state_command = 0,
-                    arg_keys_dict = {'conditionNum_channel': True, 'laser_channel': True, 
-                                    'hardwareTriggered_channel': True, 'logging_channel': False, 
-                                    'verbose_channel': False},
-                    arg_values_dict = {'conditionNum': self.current_location_idx, 'laser_ON': True, 
-                                        'hardwareTriggered_ON': False, 'logging_ON': False, 
-                                        'verbose_ON': False})
+        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(
+            trial_state_command=0,
+            arg_keys_dict={
+                'conditionNum_channel': True,
+                'laser_channel': True,
+                'hardwareTriggered_channel': True,
+                'logging_channel': False,
+                'verbose_channel': False,
+            },
+            arg_values_dict={
+                'conditionNum': self.current_location_idx,
+                'laser_ON': True,
+                'hardwareTriggered_ON': False,
+                'logging_ON': False,
+                'verbose_ON': False,
+            },
+        )
         response = self.client.send_receive(zapit_byte_tuple)
 
     def _instantiate_state_machine(self, trial_number=None):
