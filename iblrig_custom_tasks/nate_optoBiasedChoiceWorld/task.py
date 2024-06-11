@@ -6,7 +6,11 @@ for each trial
 
 Additionally the state machine is modified to add output TTLs for optogenetic stimulation
 """
+
 import logging
+import random
+import sys
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Literal
 
@@ -16,6 +20,13 @@ import yaml
 import iblrig
 from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
+
+sys.path.append('C:\zapit-tcp-bridge\python')
+if find_spec('TCPclient') is None:
+    raise ImportError(f'{__file__} requires zapit-tcp-bridge')
+from TCPclient import TCPclient
+
+stim_location_history = []
 
 log = logging.getLogger('iblrig.task')
 
@@ -40,11 +51,13 @@ class OptoStateMachine(StateMachine):
         is_opto_stimulation=False,
         states_opto_ttls=None,
         states_opto_stop=None,
+        states_mask_ttls=None,
     ):
         super().__init__(bpod)
         self.is_opto_stimulation = is_opto_stimulation
         self.states_opto_ttls = states_opto_ttls or []
         self.states_opto_stop = states_opto_stop or []
+        self.states_mask_ttls = states_mask_ttls or []
 
     def add_state(self, **kwargs):
         if self.is_opto_stimulation:
@@ -55,11 +68,16 @@ class OptoStateMachine(StateMachine):
                 ]
             elif kwargs['state_name'] in self.states_opto_stop:
                 kwargs['output_actions'] += [('SoftCode', SOFTCODE_STOP_ZAPIT)]
+        if kwargs['state_name'] in self.states_mask_ttls:
+            kwargs['output_actions'] += [
+                ('PWM1', 255),
+            ]
         super().add_state(**kwargs)
 
 
 class Session(BiasedChoiceWorldSession):
     protocol_name = 'nate_optoBiasedChoiceWorld'
+    extractor_tasks = ['TrialRegisterRaw', 'ChoiceWorldTrials', 'TrainingStatus']
 
     def __init__(
         self,
@@ -68,18 +86,15 @@ class Session(BiasedChoiceWorldSession):
         contrast_set_probability_type: Literal['skew_zero', 'uniform'] = DEFAULTS['CONTRAST_SET_PROBABILITY_TYPE'],
         opto_ttl_states: list[str] = DEFAULTS['OPTO_TTL_STATES'],
         opto_stop_states: list[str] = DEFAULTS['OPTO_STOP_STATES'],
+        mask_ttl_states: list[str] = DEFAULTS['MASK_TTL_STATES'],
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.task_params['CONTRAST_SET_PROBABILITY_TYPE'] = contrast_set_probability_type
         self.task_params['OPTO_TTL_STATES'] = opto_ttl_states
         self.task_params['OPTO_STOP_STATES'] = opto_stop_states
+        self.task_params['MASK_TTL_STATES'] = mask_ttl_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
-
-        # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
-        is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
-        trials_task = 'OptoTrialsBpod' if is_main_sync else 'OptoTrialsNidq'
-        self.extractor_tasks = ['TrialRegisterRaw', trials_task, 'TrainingStatus']
 
         # generates the opto stimulation for each trial
         self.trials_table['opto_stimulation'] = np.random.choice(
@@ -89,6 +104,12 @@ class Session(BiasedChoiceWorldSession):
         ).astype(bool)
 
     def start_hardware(self):
+        self.client = TCPclient(tcp_port=1488, tcp_ip='127.0.0.1')
+
+        self.client.close()  # need to ensure is closed first; currently nowhere that this is defined at end of task!
+        self.client.connect()
+        self.num_cond = self.client.get_num_conditions()[1][0]
+        log.warning(f'Number of conditions: {self.num_cond}')
         super().start_hardware()
         # add the softcodes for the zapit opto stimulation
         soft_code_dict = self.bpod.softcodes
@@ -98,15 +119,27 @@ class Session(BiasedChoiceWorldSession):
 
     def zapit_arm_laser(self):
         log.warning('Arming laser')
-        # TODO: insert code for arming the laser here
+        # this is where you define the laser stim (i.e., arm the laser)
+
+        self.current_location_idx = random.randrange(1, int(self.num_cond))
+
+        # hZP.send_samples(
+        #    conditionNum=current_location_idx, hardwareTriggered=True, logging=True
+        # )
+        response = self.client.send_samples(
+            conditionNum=self.current_location_idx, laser_On=True, hardwareTriggered_On=True, logging_On=True
+        )
+        log.warning(response)
+        stim_location_history.append(self.current_location_idx)
 
     def zapit_fire_laser(self):
         # just logging - actual firing will be triggered by the state machine via TTL
+        # this really only triggers a ttl and sends a log entry - no need to plug in code here
         log.warning('Firing laser')
 
     def zapit_stop_laser(self):
         log.warning('Stopping laser')
-        # TODO: insert code for stopping the laser here
+        response = self.client.stop_optostim()
 
     def _instantiate_state_machine(self, trial_number=None):
         """
@@ -123,6 +156,7 @@ class Session(BiasedChoiceWorldSession):
             is_opto_stimulation=is_opto_stimulation,
             states_opto_ttls=self.task_params['OPTO_TTL_STATES'],
             states_opto_stop=self.task_params['OPTO_STOP_STATES'],
+            states_mask_ttls=self.task_params['MASK_TTL_STATES'],
         )
 
     @staticmethod
@@ -163,6 +197,15 @@ class Session(BiasedChoiceWorldSession):
             nargs='+',
             type=str,
             help='list of the state machine states where opto stim should be stopped',
+        )
+        parser.add_argument(
+            '--mask_ttl_states',
+            option_strings=['--mask_ttl_states'],
+            dest='mask_ttl_states',
+            default=DEFAULTS['MASK_TTL_STATES'],
+            nargs='+',
+            type=str,
+            help='list of the state machine states where mask stim should be delivered',
         )
         return parser
 
