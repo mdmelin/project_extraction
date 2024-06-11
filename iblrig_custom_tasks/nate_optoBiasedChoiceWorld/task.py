@@ -22,12 +22,9 @@ from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
 
 sys.path.append('C:\zapit-tcp-bridge\python')
-if find_spec('Python_TCP_Utils') is None:
+if find_spec('TCPclient') is None:
     raise ImportError(f'{__file__} requires zapit-tcp-bridge')
-import Python_TCP_Utils as ptu
 from TCPclient import TCPclient
-
-num_cond = 52  # will need to change later - is there a function to automatically detect this?>
 
 stim_location_history = []
 
@@ -111,6 +108,8 @@ class Session(BiasedChoiceWorldSession):
 
         self.client.close()  # need to ensure is closed first; currently nowhere that this is defined at end of task!
         self.client.connect()
+        self.num_cond = self.client.get_num_conditions()[1][0]
+        log.warning(f'Number of conditions: {self.num_cond}')
         super().start_hardware()
         # add the softcodes for the zapit opto stimulation
         soft_code_dict = self.bpod.softcodes
@@ -122,30 +121,14 @@ class Session(BiasedChoiceWorldSession):
         log.warning('Arming laser')
         # this is where you define the laser stim (i.e., arm the laser)
 
-        self.current_location_idx = random.randrange(1, int(num_cond))
+        self.current_location_idx = random.randrange(1, int(self.num_cond))
 
         # hZP.send_samples(
         #    conditionNum=current_location_idx, hardwareTriggered=True, logging=True
         # )
-
-        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(
-            trial_state_command=1,
-            arg_keys_dict={
-                'conditionNum_channel': True,
-                'laser_channel': True,
-                'hardwareTriggered_channel': True,
-                'logging_channel': False,
-                'verbose_channel': False,
-            },
-            arg_values_dict={
-                'conditionNum': self.current_location_idx,
-                'laser_ON': True,
-                'hardwareTriggered_ON': True,
-                'logging_ON': False,
-                'verbose_ON': False,
-            },
+        response = self.client.send_samples(
+            conditionNum=self.current_location_idx, laser_On=True, hardwareTriggered_On=True, logging_On=True
         )
-        response = self.client.send_receive(zapit_byte_tuple)
         log.warning(response)
         stim_location_history.append(self.current_location_idx)
 
@@ -156,24 +139,7 @@ class Session(BiasedChoiceWorldSession):
 
     def zapit_stop_laser(self):
         log.warning('Stopping laser')
-        zapit_byte_tuple, zapit_int_tuple = ptu.gen_Zapit_byte_tuple(
-            trial_state_command=0,
-            arg_keys_dict={
-                'conditionNum_channel': True,
-                'laser_channel': True,
-                'hardwareTriggered_channel': True,
-                'logging_channel': False,
-                'verbose_channel': False,
-            },
-            arg_values_dict={
-                'conditionNum': self.current_location_idx,
-                'laser_ON': True,
-                'hardwareTriggered_ON': False,
-                'logging_ON': False,
-                'verbose_ON': False,
-            },
-        )
-        response = self.client.send_receive(zapit_byte_tuple)
+        response = self.client.stop_optostim()
 
     def _instantiate_state_machine(self, trial_number=None):
         """
