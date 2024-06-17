@@ -21,11 +21,6 @@ import iblrig
 from iblrig.base_choice_world import SOFTCODE, BiasedChoiceWorldSession
 from pybpodapi.protocol import StateMachine
 
-sys.path.append('C:\zapit-tcp-bridge\python')
-if find_spec('TCPclient') is None:
-    raise ImportError(f'{__file__} requires zapit-tcp-bridge')
-from TCPclient import TCPclient
-
 stim_location_history = []
 
 log = logging.getLogger('iblrig.task')
@@ -95,6 +90,7 @@ class Session(BiasedChoiceWorldSession):
         self.task_params['OPTO_STOP_STATES'] = opto_stop_states
         self.task_params['MASK_TTL_STATES'] = mask_ttl_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
+        self.client = None
 
         # generates the opto stimulation for each trial
         self.trials_table['opto_stimulation'] = np.random.choice(
@@ -104,6 +100,10 @@ class Session(BiasedChoiceWorldSession):
         ).astype(bool)
 
     def start_hardware(self):
+        sys.path.append(r'C:\zapit-tcp-bridge\python')
+        if find_spec('TCPclient') is None:
+            raise ImportError(f'{__file__} requires zapit-tcp-bridge')
+        from TCPclient import TCPclient
         self.client = TCPclient(tcp_port=1488, tcp_ip='127.0.0.1')
 
         self.client.close()  # need to ensure is closed first; currently nowhere that this is defined at end of task!
