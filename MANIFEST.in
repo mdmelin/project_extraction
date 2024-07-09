@@ -1,2 +1,5 @@
 include projects/extractor_types.json
 include projects/task_type_procedures.json
+include projects/task_extractor_map.json
+include iblrig_custom_tasks/**/*.yaml
+include iblrig_custom_tasks/**/*.csv

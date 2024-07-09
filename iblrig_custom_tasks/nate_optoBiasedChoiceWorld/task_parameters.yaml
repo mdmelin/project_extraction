@@ -1,0 +1,23 @@
+'CONTRAST_SET_PROBABILITY_TYPE': uniform  # uniform or skew_zero: uniform makes the 0 contrast as likely as the others, while skew_zero makes it half as likely as other contrasts
+'OPTO_TTL_STATES': # list of the state machine states where opto stim should be delivered
+  - trial_start
+'OPTO_STOP_STATES':
+  - no_go
+  - error
+  - reward
+'MASK_TTL_STATES': # list of the state machine states where mask stim should be delivered
+  - trial_start
+  - delay_initiation
+  - reset_rotary_encoder
+  - quiescent_period
+  - stim_on
+  - interactive_delay
+  - play_tone
+  - reset2_rotary_encoder
+  - closed_loop
+  - no_go
+  - freeze_error
+  - error
+  - freeze_reward
+  - reward
+'PROBABILITY_OPTO_STIM': 0.2  # probability of optogenetic stimulation

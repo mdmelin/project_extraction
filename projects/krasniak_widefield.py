@@ -3,16 +3,25 @@ from pathlib import Path
 from ibllib.io.extractors.ephys_fpga import get_main_probe_sync, get_sync_fronts
 from ibllib.plots.snapshot import ReportSnapshot
 import numpy as np
-from labcams.io import parse_cam_log
 import ibllib.exceptions as err
 from ibllib.pipes.base_tasks import WidefieldTask
 import neurodsp as dsp
 import logging
-import wfield.cli as wfield_cli
 from one.api import ONE
 from ibllib.io.extractors.camera import get_video_length
 
 _logger = logging.getLogger('ibllib')
+
+try:
+    from labcams.io import parse_cam_log
+except ImportError:
+    _logger.warning('labcams not installed')
+
+try:
+    import wfield.cli as wfield_cli
+except ImportError:
+    _logger.warning('wfield not installed')
+
 
 DEFAULT_WIRING_MAP = {
     3: 470,

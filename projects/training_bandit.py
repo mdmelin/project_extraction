@@ -71,8 +71,8 @@ def extract_all(session_path, save=True, bpod_trials=None, settings=None):
     settings = settings or rawio.load_settings(session_path)
     _logger.info(f'{extractor_type} session on {settings["PYBPOD_BOARD"]}')
 
-    if settings is None or settings['IBLRIG_VERSION_TAG'] == '':
-        settings = {'IBLRIG_VERSION_TAG': '100.0.0'}
+    if settings is None or settings['IBLRIG_VERSION'] == '':
+        settings = {'IBLRIG_VERSION': '100.0.0'}
 
     # check that the extraction works for both the shaping 0-100 and the other one
     base = [BanditRepNum, tt.GoCueTriggerTimes, tt.StimOnTriggerTimes, tt.ItiInTimes, tt.StimOffTriggerTimes,
@@ -95,7 +95,7 @@ class BanditTrialsTable(tt.TrialsTable):
         intervals, goCue_times, response_times, choice, stimOn_times, contrastLeft, contrastRight,
         feedback_times, feedbackType, rewardVolume, probabilityLeft, firstMovement_times
     Additionally extracts the following wheel data:
-        wheel_timestamps, wheel_position, wheel_moves_intervals, wheel_moves_peak_amplitude
+        wheel_timestamps, wheel_position, wheelMoves_intervals, wheelMoves_peakAmplitude
     """
 
     def _extract(self, **kwargs):
@@ -103,7 +103,7 @@ class BanditTrialsTable(tt.TrialsTable):
                 tt.FeedbackTimes, tt.FeedbackType, tt.RewardVolume, BanditProbabilityLeft, tt.Wheel]
         exclude = [
             'stimOff_times', 'stimFreeze_times', 'wheel_timestamps', 'wheel_position',
-            'wheel_moves_intervals', 'wheel_moves_peak_amplitude', 'peakVelocity_times', 'is_final_movement'
+            'wheelMoves_intervals', 'wheelMoves_peakAmplitude', 'peakVelocity_times', 'is_final_movement'
         ]
 
         out, _ = run_extractor_classes(base, session_path=self.session_path, bpod_trials=self.bpod_trials, settings=self.settings,
