@@ -28,11 +28,42 @@ class AdaptiveTimeoutStateMachine(StateMachine):
 class Session(TrainingChoiceWorldSession):
     protocol_name = 'nate_adaptiveTimeoutChoiceWorld'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        *args,
+        adaptive_delay_nogo=DEFAULTS['ADAPTIVE_FEEDBACK_NOGO_DELAY_SECS'],
+        adaptive_delay_error=DEFAULTS['ADAPTIVE_FEEDBACK_ERROR_DELAY_SECS'],
+        **kwargs,
+    ):
+        self.adaptive_delay_nogo = adaptive_delay_nogo
+        self.adaptive_delay_error = adaptive_delay_error
         super().__init__(*args, **kwargs)
 
     def _instantiate_state_machine(self, trial_number=None):
         return AdaptiveTimeoutStateMachine(self.bpod)
+
+    @staticmethod
+    def extra_parser():
+        parser = super(Session, Session).extra_parser()
+        parser.add_argument(
+            '--adaptive_delay_nogo',
+            option_strings=['--adaptive_delay_nogo'],
+            dest='adaptive_delay_nogo',
+            default=DEFAULTS['ADAPTIVE_FEEDBACK_NOGO_DELAY_SECS'],
+            nargs='+',
+            type=float,
+            help='list of delays for no-go condition (contrasts: 1.0, 0.25, 0.125, 0.0625, 0.0)',
+        )
+        parser.add_argument(
+            '--adaptive_delay_error',
+            option_strings=['--adaptive_delay_error'],
+            dest='adaptive_delay_nogo',
+            default=DEFAULTS['ADAPTIVE_FEEDBACK_ERROR_DELAY_SECS'],
+            nargs='+',
+            type=float,
+            help='list of delays for error condition (contrasts: 1.0, 0.25, 0.125, 0.0625, 0.0)',
+        )
+        return parser
 
 
 if __name__ == '__main__':  # pragma: no cover
