@@ -21,7 +21,24 @@ with open(Path(__file__).parent.joinpath('task_parameters.yaml')) as f:
 
 
 class AdaptiveTimeoutStateMachine(StateMachine):
+
+    def __init__(
+        self,
+        bpod,
+        adaptive_delay_nogo,
+        adaptive_delay_error
+    ):
+        super().__init__(bpod)
+        self.adaptive_delay_nogo = adaptive_delay_nogo
+        self.adaptive_delay_error = adaptive_delay_error
+
+
     def add_state(self, **kwargs):
+        match kwargs['state_name']:
+            case 'nogo':
+                pass
+            case 'error':
+                pass
         super().add_state(**kwargs)
 
 
@@ -38,9 +55,11 @@ class Session(TrainingChoiceWorldSession):
         self.adaptive_delay_nogo = adaptive_delay_nogo
         self.adaptive_delay_error = adaptive_delay_error
         super().__init__(*args, **kwargs)
+        assert len(self.adaptive_delay_nogo) == len(self.task_params.CONTRAST_SET)
+        assert len(self.adaptive_delay_error) == len(self.task_params.CONTRAST_SET)
 
     def _instantiate_state_machine(self, trial_number=None):
-        return AdaptiveTimeoutStateMachine(self.bpod)
+        return AdaptiveTimeoutStateMachine(self.bpod, self.adaptive_delay_nogo, self.adaptive_delay_error)
 
     @staticmethod
     def extra_parser():
