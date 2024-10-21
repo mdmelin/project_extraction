@@ -5,12 +5,14 @@ choices depending on the stimulus contrast.
 
 import logging
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import yaml
+from pydantic import NonNegativeFloat
 
-from iblrig.base_choice_world import TrainingChoiceWorldSession
 from iblrig.misc import get_task_arguments
-from pybpodapi.state_machine import StateMachine
+from iblrig_tasks._iblrig_tasks_trainingChoiceWorld.task import Session as TrainingCWSession
 
 log = logging.getLogger('iblrig.task')
 
@@ -20,30 +22,14 @@ with open(Path(__file__).parent.joinpath('task_parameters.yaml')) as f:
     DEFAULTS = yaml.safe_load(f)
 
 
-class AdaptiveTimeoutStateMachine(StateMachine):
-
-    def __init__(
-        self,
-        bpod,
-        adaptive_delay_nogo,
-        adaptive_delay_error
-    ):
-        super().__init__(bpod)
-        self.adaptive_delay_nogo = adaptive_delay_nogo
-        self.adaptive_delay_error = adaptive_delay_error
+class AdaptiveTimeoutChoiceWorldTrialData(TrainingCWSession.TrialDataModel):
+    adaptive_delay_nogo: NonNegativeFloat
+    adaptive_delay_error: NonNegativeFloat
 
 
-    def add_state(self, **kwargs):
-        match kwargs['state_name']:
-            case 'nogo':
-                pass
-            case 'error':
-                pass
-        super().add_state(**kwargs)
-
-
-class Session(TrainingChoiceWorldSession):
+class Session(TrainingCWSession):
     protocol_name = 'nate_adaptiveTimeoutChoiceWorld'
+    TrialDataModel = AdaptiveTimeoutChoiceWorldTrialData
 
     def __init__(
         self,
@@ -52,14 +38,36 @@ class Session(TrainingChoiceWorldSession):
         adaptive_delay_error=DEFAULTS['ADAPTIVE_FEEDBACK_ERROR_DELAY_SECS'],
         **kwargs,
     ):
-        self.adaptive_delay_nogo = adaptive_delay_nogo
-        self.adaptive_delay_error = adaptive_delay_error
+        self._adaptive_delay_nogo = adaptive_delay_nogo
+        self._adaptive_delay_error = adaptive_delay_error
         super().__init__(*args, **kwargs)
-        assert len(self.adaptive_delay_nogo) == len(self.task_params.CONTRAST_SET)
-        assert len(self.adaptive_delay_error) == len(self.task_params.CONTRAST_SET)
+        assert len(self._adaptive_delay_nogo) == len(self.task_params.CONTRAST_SET)
+        assert len(self._adaptive_delay_error) == len(self.task_params.CONTRAST_SET)
 
-    def _instantiate_state_machine(self, trial_number=None):
-        return AdaptiveTimeoutStateMachine(self.bpod, self.adaptive_delay_nogo, self.adaptive_delay_error)
+    def draw_next_trial_info(self, **kwargs):
+        super().draw_next_trial_info(**kwargs)
+        contrast = self.trials_table.at[self.trial_num, 'contrast']
+        index = np.flatnonzero(np.array(self.task_params['CONTRAST_SET']) == contrast)[0]
+        self.trials_table.at[self.trial_num, 'adaptive_delay_nogo'] = self._adaptive_delay_nogo[index]
+        self.trials_table.at[self.trial_num, 'adaptive_delay_error'] = self._adaptive_delay_error[index]
+
+    @property
+    def feedback_nogo_delay(self):
+        return self.trials_table.at[self.trial_num, 'adaptive_delay_nogo']
+
+    @property
+    def feedback_error_delay(self):
+        return self.trials_table.at[self.trial_num, 'adaptive_delay_error']
+
+    def show_trial_log(self, extra_info: dict[str, Any] | None = None, log_level: int = logging.INFO):
+        trial_info = self.trials_table.iloc[self.trial_num]
+        info_dict = {
+            'Adaptive no-go delay': f'{trial_info.adaptive_delay_nogo:.2f} s',
+            'Adaptive error delay': f'{trial_info.adaptive_delay_error:.2f} s',
+        }
+        if isinstance(extra_info, dict):
+            info_dict.update(extra_info)
+        super().show_trial_log(extra_info=info_dict, log_level=log_level)
 
     @staticmethod
     def extra_parser():
@@ -71,7 +79,7 @@ class Session(TrainingChoiceWorldSession):
             default=DEFAULTS['ADAPTIVE_FEEDBACK_NOGO_DELAY_SECS'],
             nargs='+',
             type=float,
-            help='list of delays for no-go condition (contrasts: 1.0, 0.25, 0.125, 0.0625, 0.0)',
+            help='list of delays for no-go condition (contrasts: 1.0, 0.5, 0.25, 0.125, 0.0625, 0.0)',
         )
         parser.add_argument(
             '--adaptive_delay_error',
@@ -80,7 +88,7 @@ class Session(TrainingChoiceWorldSession):
             default=DEFAULTS['ADAPTIVE_FEEDBACK_ERROR_DELAY_SECS'],
             nargs='+',
             type=float,
-            help='list of delays for error condition (contrasts: 1.0, 0.25, 0.125, 0.0625, 0.0)',
+            help='list of delays for error condition (contrasts: 1.0, 0.5, 0.25, 0.125, 0.0625, 0.0)',
         )
         return parser
 
