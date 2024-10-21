@@ -84,7 +84,7 @@ class Session(TrainingCWSession):
         parser.add_argument(
             '--adaptive_delay_error',
             option_strings=['--adaptive_delay_error'],
-            dest='adaptive_delay_nogo',
+            dest='adaptive_delay_error',
             default=DEFAULTS['ADAPTIVE_FEEDBACK_ERROR_DELAY_SECS'],
             nargs='+',
             type=float,
