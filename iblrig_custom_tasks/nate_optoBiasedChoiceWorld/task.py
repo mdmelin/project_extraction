@@ -47,21 +47,22 @@ class OptoStateMachine(StateMachine):
         states_opto_ttls=None,
         states_opto_stop=None,
         states_mask_ttls=None,
+        use_zapit=False
     ):
         super().__init__(bpod)
         self.is_opto_stimulation = is_opto_stimulation
         self.states_opto_ttls = states_opto_ttls or []
         self.states_opto_stop = states_opto_stop or []
         self.states_mask_ttls = states_mask_ttls or []
+        self.use_zapit = use_zapit
 
     def add_state(self, **kwargs):
         if self.is_opto_stimulation:
             if kwargs['state_name'] in self.states_opto_ttls:
-                kwargs['output_actions'] += [
-                    ('SoftCode', SOFTCODE_FIRE_ZAPIT),
-                    ('BNC2', 255),
-                ]
-            elif kwargs['state_name'] in self.states_opto_stop:
+                kwargs['output_actions'] += [('BNC2', 255)]
+                if self.use_zapit:
+                    kwargs['output_actions'] += [('SoftCode', SOFTCODE_FIRE_ZAPIT)]
+            elif kwargs['state_name'] in self.states_opto_stop and self.use_zapit:
                 kwargs['output_actions'] += [('SoftCode', SOFTCODE_STOP_ZAPIT)]
         if kwargs['state_name'] in self.states_mask_ttls:
             kwargs['output_actions'] += [
@@ -153,6 +154,7 @@ class Session(BiasedChoiceWorldSession):
             states_opto_ttls=self.task_params['OPTO_TTL_STATES'],
             states_opto_stop=self.task_params['OPTO_STOP_STATES'],
             states_mask_ttls=self.task_params['MASK_TTL_STATES'],
+            use_zapit=self.task_params['USE_ZAPIT']
         )
 
     @staticmethod
