@@ -208,6 +208,7 @@ class Session(BiasedChoiceWorldSession):
         parser.add_argument(
             '--use_zapit',
             option_strings=['--use_zapit'],
+            default=DEFAULTS['USE_ZAPIT'],
             action='store_true',
             dest='use_zapit',
             help='use the Zapit TCP client',
@@ -215,6 +216,7 @@ class Session(BiasedChoiceWorldSession):
         parser.add_argument(
             '--stim_reverse',
             option_strings=['--stim_reverse'],
+            default=DEFAULTS['STIM_REVERSE'],
             action='store_true',
             dest='stim_reverse',
             help='Inverse relationship of wheel to stimulus movement',
