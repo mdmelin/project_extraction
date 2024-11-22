@@ -143,8 +143,10 @@ class Session(BpodMixin):
 
     def _set_bpod_out(self, val):
         """Set Bpod BNC1 output state."""
+        BNC_HIGH = 255
+        BNC_LOW = 0
         if isinstance(val, bool):
-            val = 255 if val else 128
+            val = BNC_HIGH if val else BNC_LOW
         self.bpod.manual_override(Bpod.ChannelTypes.OUTPUT, Bpod.ChannelNames.BNC, channel_number=1, value=val)
 
     def _run(self):
