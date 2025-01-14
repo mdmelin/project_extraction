@@ -17,7 +17,7 @@ class Session(BiasedChoiceWorldSession):
 
     protocol_name = 'samuel_cuedBiasedChoiceWorld'
 
-    def __init__(self, *args, delay_secs=0, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
 
         # loads in the settings in order to determine the main sync and thus the pipeline extractor tasks
@@ -27,7 +27,6 @@ class Session(BiasedChoiceWorldSession):
         # Update experiment description which was created by superclass init
         next(iter(self.experiment_description['tasks']))['extractors'] = self.extractor_tasks
 
-        self.task_params['SESSION_DELAY_START'] = delay_secs
         # init behaviour data
         self.movement_left = self.device_rotary_encoder.THRESHOLD_EVENTS[
             self.task_params.QUIESCENCE_THRESHOLDS[0]]
