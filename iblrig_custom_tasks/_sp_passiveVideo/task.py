@@ -149,7 +149,7 @@ class Player:
             None is returned when no video is loaded.
         """
         if self._media:
-            length = self._media.get_length()
+            length = self._player.get_length()
             if length > -1:
                 return length / 1e3
 
