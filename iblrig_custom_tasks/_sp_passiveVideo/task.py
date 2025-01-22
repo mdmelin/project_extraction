@@ -188,7 +188,6 @@ class Session(BpodMixin, NetworkSession):
                 shutil.copy(self.task_params.VIDEO, video_file_path)
             else:
                 _logger.warning('Video not copied (video most likely was not played)')
-            self. self.video._media.get_mrl()
         self.paths.SESSION_FOLDER.joinpath('transfer_me.flag').touch()
 
     def start_hardware(self):
