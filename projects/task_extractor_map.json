@@ -1,5 +1,11 @@
 {
   "samuel_cuedBiasedChoiceWorld": "BiasedTrials",
   "_iblrig_tasks_neuromodulatorChoiceWorld": "projects.neuromodulators.TrialsTableNeuromodulator",
-  "nate_optoBiasedChoiceWorld": "projects.nate_optoBiasedChoiceWorld.TrialsOpto"
+  "nate_optoBiasedChoiceWorld": "projects.nate_optoBiasedChoiceWorld.TrialsOpto",
+  "FPChoiceWorld": "BiasedTrials",
+  "FPROptoChoiceWorld": "projects.alejandro_FPLROptoChoiceWorld.TrialsFPLROpto",
+  "FPLOptoChoiceWorld": "projects.alejandro_FPLROptoChoiceWorld.TrialsFPLROpto",
+  "_bandit_biasedChoiceWorld": "projects.training_bandit.TrialsBandit",
+  "_bandit_100_0_biasedChoiceWorld": "projects.training_bandit.TrialsBandit",
+  "_bandit_alllaser_cued_ephysChoiceWorld": "projects.training_bandit.TrialsLaserBandit"
 }

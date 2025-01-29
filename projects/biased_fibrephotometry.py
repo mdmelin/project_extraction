@@ -511,8 +511,14 @@ class FibrePhotometry(BaseFibrePhotometry):
         mask = state.isin(CHANNELS['L470'])
         if ttl_interval == 40:
             frame_number = fp_data['FrameCounter'][mask]
+        elif ttl_interval == 20:
+            frame_number = fp_data['FrameCounter'][mask]
         elif ttl_interval == 10:
             frame_number = fp_data['FrameCounter']
+        elif ttl_interval == 25:
+            frame_number = fp_data['FrameCounter']
+        elif ttl_interval == 50:
+            frame_number = fp_data['FrameCounter'][mask]
 
         ttl_diff = np.diff(daq_data.loc[daq_data['photometry_ttl'] == 1].index)
         while ttl_diff.max() > ttl_interval * 3:
@@ -531,8 +537,8 @@ class FibrePhotometry(BaseFibrePhotometry):
         daq_data.loc[np.where(daq_data['bpod'].diff() == -1)[0], 'ttl_off'] = 1
         daq_data.loc[np.where(daq_data['bpod'].diff() == 1)[0], 'ttl_duration'] = \
             daq_data.loc[daq_data['ttl_off'] == 1].index - daq_data.loc[daq_data['ttl_on'] == 1].index
-        # Valve and error tones have pulses > 100
-        daq_data.loc[daq_data['ttl_duration'] > 100, 'feedback_times'] = 1
+        # Valve and error tones have pulses > 105
+        daq_data.loc[daq_data['ttl_duration'] > 105, 'feedback_times'] = 1
 
         n_daq_trials = (daq_data['feedback_times'] == 1).sum()
         if n_daq_trials == trials['feedback_times'].size:
@@ -540,7 +546,14 @@ class FibrePhotometry(BaseFibrePhotometry):
         elif n_daq_trials - trials['feedback_times'].size == 1:
             daq_data.loc[daq_data['feedback_times'] == 1, 'bpod_times'] = np.r_[trials['feedback_times'], np.nan]
         else:
-            assert n_daq_trials == trials['feedback_times'].size, "Trials don't match up"
+            trial_diff = n_daq_trials - trials['feedback_times'].size
+            nan_trials = np.where(trials.choice == 0)[0]
+            if len(nan_trials) == -1 * trial_diff:
+                feedback_times = np.delete(trials['feedback_times'], nan_trials)
+                assert len(feedback_times) == n_daq_trials, "Trials don't match up"
+                daq_data.loc[daq_data['feedback_times'] == 1, 'bpod_times'] = feedback_times
+            else:
+                assert n_daq_trials == trials['feedback_times'].size, "Trials don't match up"
 
         daq_data['bpod_times'].interpolate(inplace=True)
         # Set values after last pulse to nan
