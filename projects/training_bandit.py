@@ -1,3 +1,40 @@
+"""Bpod extractor for alejandro's _bandit_100_0_biasedChoiceWorld, _bandit_biasedChoiceWorld and
+_bandit_alllaser_cued_ephysChoiceWorld task protocols
+
+_bandit_100_0_biasedChoiceWorld and _bandit_biasedChoiceWorld
+Bandit Choice World task where two Gabor patches appear on the screen. The mouse must move the wheel beyond the threshold
+to the left or right to get a reward. The side that is rewarded changes in blocks defined by `_av_trials.probabilityLeft'.
+Reward is not related in any way to visual stimulus. For _bandit_100_0_biasedChoiceWorld within a block the probability
+of being rewarded for moving the wheel to the correct side is 100% (0% for the other side).
+For _bandit_biasedChoiceWorld, the probability of being rewarded is 70%.
+
+Additional datasets:
+- '_av_trials.probabilityRewardLeft.npy' - indicates the probability of reward being given on left movement of trial
+Datasets that differ from normal tasK:
+- '_ibl_trials.choice' - choice is inferred from direction of wheel movement that first reaches a threshold
+- '_ibl_trials.contrastLeft' - in this task reward is not related to visual stimulus. For each trial two Gabor patches
+of 100% contrast are shown on the left and right of screen that move with the wheel. Therefore value of 1 for all trials
+- '_ibl_trials.contrastRight' - in this task reward is not related to visual stimulus. For each trial two Gabor patches
+of 100% contrast are shown on the left and right of screen that move with the wheel. Therefore value of 1 for all trials
+- '_ibl_trials.probabilityLeft' - the reward is not linked to visual stimulus so all values are nan
+
+_bandit_alllaser_cued_ephysChoiceWorld
+Same as _bandit_biasedChoiceWorld above with the addition of laser stimulation. When the task is in an opto block,
+defined by '_av_trials.laserProbability.npy', reward is given through laser stimulation to the VTA rather than a water
+reward.
+
+Additional datasets:
+- '_av_trials.probabilityRewardLeft.npy' - indicates the probability of reward being given on left movement of trial
+- '_av_trials.laserProbability.npy' - indicates the block of trials where laser stimulation is active
+- '_ibl_trials.laserStimulation.npy' - indicates trials where the laser was actually stimulated, only those trials
+within a laser block with correct feedback
+
+Datasets that differ from normal tasK:
+- See _bandit_100_0_biasedChoiceWorld and _bandit_biasedChoiceWorld
+In addition
+- '_ibl_trials.rewardVolume' - where reward is given by the laser instead of water the reward volume is set to zero
+"""
+
 import logging
 import numpy as np
 from one.alf.io import AlfBunch
@@ -193,6 +230,9 @@ class BanditRewardVolume(tt.RewardVolume):
 
 
 class BanditLaserProbability(BaseBpodTrialsExtractor):
+    """
+    Get the block of trials where laser stimulation is active
+    """
     save_names = '_av_trials.laserProbability.npy'
     var_names = 'laserProbability'
 
