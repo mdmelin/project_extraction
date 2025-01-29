@@ -8,7 +8,7 @@ version         = "0.6.5"
 description     = "Custom extractors for satellite tasks"
 dynamic         = [ "readme" ]
 keywords        = [ "IBL", "neuro-science" ]
-requires-python = "~=3.8"
+requires-python = "~=3.10"
 license         = { file = "LICENSE" }
 
 [project.optional-dependencies]
