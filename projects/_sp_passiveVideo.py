@@ -1,5 +1,6 @@
 import logging
 
+import cv2
 import numpy as np
 import pandas as pd
 import one.alf.io as alfio
@@ -8,11 +9,13 @@ from iblutil.spacer import Spacer
 
 from ibllib.pipes.base_tasks import BehaviourTask
 from ibllib.exceptions import SyncBpodFpgaException
+from ibllib.io.video import get_video_meta
 from ibllib.io.extractors.ephys_fpga import get_protocol_period, get_sync_fronts
 from ibllib.io.raw_daq_loaders import load_timeline_sync_and_chmap
 from ibllib.io.extractors.mesoscope import plot_timeline
 
 _logger = logging.getLogger('ibllib').getChild(__name__)
+_logger.setLevel(logging.DEBUG)
 
 
 class PassiveVideoTimeline(BehaviourTask):
@@ -65,14 +68,13 @@ class PassiveVideoTimeline(BehaviourTask):
             np.random.set_state(state)
 
     def load_sync_sequence_from_video(self, video_file, location='bottom right', size=(5, 5)):
-        import cv2
         cap = cv2.VideoCapture(str(video_file))
         sequence = []
         location = location.casefold().split()
         loc_map = {
             'top': slice(0, size[1]), 'bottom': slice(-size[1], None),
             'left': slice(0, size[0]), 'right': slice(-size[0], None)}
-        idx = tuple(loc_map[l] for l in reversed(location))  # h, w
+        idx = tuple(loc_map[x] for x in reversed(location))  # h, w
         success = True
         while success:
             success, frame = cap.read()
@@ -98,7 +100,7 @@ class PassiveVideoTimeline(BehaviourTask):
         save : bool, optional
             Whether to save the video frame times to file, by default True.
         frame_rate : int, optional
-            The frame rate of the video presented, by default 60.
+            The frame rate of the video presented, by default 30.
         display : bool, optional
             When true, plot the aligned frame times. By default False.
 
@@ -119,6 +121,7 @@ class PassiveVideoTimeline(BehaviourTask):
         SyncBpodFpgaException
             The synchronization of frame times was likely unsuccessful.
         """
+        DEFAULT_FRAME_RATE = 30
         _, (p,), _ = self.input_files[0].find_files(self.session_path)
         # Load raw data
         proc_data = pd.read_parquet(p)
@@ -129,7 +132,6 @@ class PassiveVideoTimeline(BehaviourTask):
         # Attempt to get the frame rate from the video file if not provided
         video_file = next(self.session_path.joinpath(self.collection).glob('_sp_video.raw.*'))
         if video_file.exists():
-            from ibllib.io.video import get_video_meta
             video_meta = get_video_meta(video_file)
             if frame_rate is not None and frame_rate != video_meta.fps:
                 _logger.warning(
@@ -140,7 +142,7 @@ class PassiveVideoTimeline(BehaviourTask):
             frame_rate = video_meta.fps
         else:
             video_meta = None
-            frame_rate = frame_rate or 60
+            frame_rate = frame_rate or DEFAULT_FRAME_RATE
             _logger.warning('Video not found. Assumed video frame rate: %.2f Hz', frame_rate)
         Fs = self.timeline['meta']['daqSampleRate']
         assert Fs > frame_rate * 1.5, 'DAQ sample rate must be higher than video frame rate'
@@ -191,7 +193,7 @@ class PassiveVideoTimeline(BehaviourTask):
             ts = f2ttl['times'][np.logical_and(f2ttl['times'] >= start, f2ttl['times'] < end)]
             if video_meta:
                 _logger.debug('Repeat %i: video duration: %.2fs, f2ttl duration: %.2f',
-                              i, video_meta.duration, ts[-1] - ts[0])
+                              i, video_meta.duration.seconds, ts[-1] - ts[0])
 
             # video_runtime is the video length reported by VLC.
             # As it was added later, the less accurate media player timestamps may be used if the former is not available
@@ -223,7 +225,8 @@ class PassiveVideoTimeline(BehaviourTask):
             frame_times[:len(sequence_times), i] = fcn(sequence_times)
 
         # Trim down to length of repeat with most frames
-        frame_times = frame_times[:np.where(np.all(np.isnan(frame_times), axis=1))[0][0], :]
+        if np.any(empty := np.all(np.isnan(frame_times), axis=1)):
+            frame_times = frame_times[:np.where(empty)[0][0], :]
 
         if display:
             import matplotlib.pyplot as plt
