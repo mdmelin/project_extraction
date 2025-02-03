@@ -3,7 +3,7 @@
   "_iblrig_tasks_neuromodulatorChoiceWorld": "projects.neuromodulators.TrialsTableNeuromodulator",
   "nate_optoBiasedChoiceWorld": "projects.nate_optoBiasedChoiceWorld.TrialsOpto",
   "max_optoStaticTrainingChoiceWorld": "projects.max_optoStaticTrainingChoiceWorld.TrialsOpto",
-  "max_staticTrainingChoiceWorld": "BiasedTrials"
+  "max_staticTrainingChoiceWorld": "BiasedTrials",
   "FPChoiceWorld": "BiasedTrials",
   "FPROptoChoiceWorld": "projects.alejandro_FPLROptoChoiceWorld.TrialsFPLROpto",
   "FPLOptoChoiceWorld": "projects.alejandro_FPLROptoChoiceWorld.TrialsFPLROpto",
