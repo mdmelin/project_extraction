@@ -15,7 +15,7 @@ import pandas as pd
 from pybpodapi.protocol import Bpod
 
 import iblrig.misc
-from iblrig.base_tasks import BpodMixin
+from iblrig.base_tasks import BpodMixin, NetworkSession
 
 _logger = logging.getLogger(f'iblrig.{__name__}')
 
@@ -34,7 +34,7 @@ class MediaStats(vlc.MediaStats):
 
     def fieldnames(self):
         """Return the field names."""
-        return zip(*self._fields_)[0]
+        return list(zip(*self._fields_))[0]
 
     def as_tuple(self):
         """Return all attribute values as a tuple."""
@@ -149,12 +149,12 @@ class Player:
             None is returned when no video is loaded.
         """
         if self._media:
-            length = self._media.get_length()
+            length = self._player.get_length()
             if length > -1:
                 return length / 1e3
 
 
-class Session(BpodMixin):
+class Session(BpodMixin, NetworkSession):
     """Play a single video."""
 
     protocol_name = '_sp_passiveVideo'
@@ -181,14 +181,14 @@ class Session(BpodMixin):
             if 20 > self._log_level > 0:
                 stats = self.video.stats
                 stats.to_parquet(self.paths.STATS_FILE_PATH)
-            if self.video._media and self.video._media.get_mrl().endswith(str(self.task_params.VIDEO)):
-                ext = Path(self.task_params.VIDEO).suffix
+            video_src = Path(self.task_params.VIDEO)
+            if self.video._media and self.video._media.get_mrl().endswith(video_src.as_posix()):
+                ext = video_src.suffix
                 video_file_path = self.paths.DATA_FILE_PATH.with_name(f'_sp_video.raw{ext}')
-                _logger.info('Copying %s -> %s', self.task_params.VIDEO, video_file_path)
-                shutil.copy(self.task_params.VIDEO, video_file_path)
+                _logger.info('Copying %s -> %s', video_src, video_file_path)
+                shutil.copy(video_src, video_file_path)
             else:
                 _logger.warning('Video not copied (video most likely was not played)')
-            self. self.video._media.get_mrl()
         self.paths.SESSION_FOLDER.joinpath('transfer_me.flag').touch()
 
     def start_hardware(self):

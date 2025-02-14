@@ -1,5 +1,6 @@
 import logging
 
+import cv2
 import numpy as np
 import pandas as pd
 import one.alf.io as alfio
@@ -8,11 +9,13 @@ from iblutil.spacer import Spacer
 
 from ibllib.pipes.base_tasks import BehaviourTask
 from ibllib.exceptions import SyncBpodFpgaException
+from ibllib.io.video import get_video_meta
 from ibllib.io.extractors.ephys_fpga import get_protocol_period, get_sync_fronts
 from ibllib.io.raw_daq_loaders import load_timeline_sync_and_chmap
 from ibllib.io.extractors.mesoscope import plot_timeline
 
 _logger = logging.getLogger('ibllib').getChild(__name__)
+_logger.setLevel(logging.DEBUG)
 
 
 class PassiveVideoTimeline(BehaviourTask):
@@ -25,6 +28,7 @@ class PassiveVideoTimeline(BehaviourTask):
         signature = {}
         signature['input_files'] = [
             ('_sp_taskData.raw.*', self.collection, True),  # TODO Create dataset type?
+            ('_sp_video.raw.*', self.collection, False),
             ('_iblrig_taskSettings.raw.*', self.collection, True),
             (f'_{self.sync_namespace}_DAQdata.raw.npy', self.sync_collection, True),
             (f'_{self.sync_namespace}_DAQdata.timestamps.npy', self.sync_collection, True),
@@ -63,7 +67,27 @@ class PassiveVideoTimeline(BehaviourTask):
         finally:
             np.random.set_state(state)
 
-    def extract_frame_times(self, save=True, frame_rate=60, display=False, **kwargs):
+    def load_sync_sequence_from_video(self, video_file, location='bottom right', size=(5, 5)):
+        cap = cv2.VideoCapture(str(video_file))
+        sequence = []
+        location = location.casefold().split()
+        loc_map = {
+            'top': slice(0, size[1]), 'bottom': slice(-size[1], None),
+            'left': slice(0, size[0]), 'right': slice(-size[0], None)}
+        idx = tuple(loc_map[x] for x in reversed(location))  # h, w
+        success = True
+        while success:
+            success, frame = cap.read()
+            if success:
+                # Find the sync square in the video frame
+                pixel = np.mean(frame[idx])
+                sequence.append(int(pixel > 128))
+        length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        assert len(sequence) == length, 'sequence length does not match video length'
+        return np.array(sequence)
+
+    def extract_frame_times(self, save=True, frame_rate=None, display=False, **kwargs):
         """Extract the Bpod trials data and Timeline acquired signals.
 
         Sync requires three steps:
@@ -76,7 +100,7 @@ class PassiveVideoTimeline(BehaviourTask):
         save : bool, optional
             Whether to save the video frame times to file, by default True.
         frame_rate : int, optional
-            The frame rate of the video presented, by default 60.
+            The frame rate of the video presented, by default 30.
         display : bool, optional
             When true, plot the aligned frame times. By default False.
 
@@ -97,12 +121,31 @@ class PassiveVideoTimeline(BehaviourTask):
         SyncBpodFpgaException
             The synchronization of frame times was likely unsuccessful.
         """
+        DEFAULT_FRAME_RATE = 30
         _, (p,), _ = self.input_files[0].find_files(self.session_path)
         # Load raw data
         proc_data = pd.read_parquet(p)
         sync_path = self.session_path / self.sync_collection
         self.timeline = alfio.load_object(sync_path, 'DAQdata', namespace='timeline')
         sync, chmap = load_timeline_sync_and_chmap(sync_path, timeline=self.timeline)
+
+        # Attempt to get the frame rate from the video file if not provided
+        video_file = next(self.session_path.joinpath(self.collection).glob('_sp_video.raw.*'))
+        if video_file.exists():
+            video_meta = get_video_meta(video_file)
+            if frame_rate is not None and frame_rate != video_meta.fps:
+                _logger.warning(
+                    'Frame rate mismatch: %.2f Hz (video) vs %.2f Hz (provided). Using %.2f Hz',
+                    video_meta.fps, frame_rate, video_meta.fps)
+            else:
+                _logger.debug('Video frame rate: %.2f Hz', video_meta.fps)
+            frame_rate = video_meta.fps
+        else:
+            video_meta = None
+            frame_rate = frame_rate or DEFAULT_FRAME_RATE
+            _logger.warning('Video not found. Assumed video frame rate: %.2f Hz', frame_rate)
+        Fs = self.timeline['meta']['daqSampleRate']
+        assert Fs > frame_rate * 1.5, 'DAQ sample rate must be higher than video frame rate'
 
         bpod = get_sync_fronts(sync, chmap['bpod'])
         # Get the spacer times for this protocol
@@ -133,7 +176,8 @@ class PassiveVideoTimeline(BehaviourTask):
         # These durations are longer than video actually played and will be cut down after
         durations = (proc_data['intervals_1'] - proc_data['intervals_0']).values
         max_n_frames = np.max(np.ceil(durations * frame_rate).astype(int))
-        frame_times = np.full((max_n_frames, len(proc_data)), np.nan)
+        n_frames = video_meta.length if video_meta else max_n_frames
+        frame_times = np.full((n_frames, len(proc_data)), np.nan)
 
         sync_sequence = kwargs.get('sync_sequence', self.generate_sync_sequence())
         for i, rep in proc_data.iterrows():
@@ -147,6 +191,9 @@ class PassiveVideoTimeline(BehaviourTask):
                 end = start + (rep['intervals_1'] - rep['intervals_0'])
             f2ttl = get_sync_fronts(sync, chmap['frame2ttl'])
             ts = f2ttl['times'][np.logical_and(f2ttl['times'] >= start, f2ttl['times'] < end)]
+            if video_meta:
+                _logger.debug('Repeat %i: video duration: %.2fs, f2ttl duration: %.2f',
+                              i, video_meta.duration.seconds, ts[-1] - ts[0])
 
             # video_runtime is the video length reported by VLC.
             # As it was added later, the less accurate media player timestamps may be used if the former is not available
@@ -162,23 +209,24 @@ class PassiveVideoTimeline(BehaviourTask):
             # Find change points (black <-> white indices)
             x, = np.where(np.abs(np.diff(x)))
             # Include first frame as change point
-            x = np.r_[0, x]
+            x = np.r_[0, x + 1]
             # Synchronize the two by aligning flip times
             DRIFT_THRESHOLD_PPM = 50
-            Fs = self.timeline['meta']['daqSampleRate']
-            fcn, drift = ibldsp.utils.sync_timestamps(sequence_times[x], ts, tbin=1 / Fs, linear=True)
+            fcn, drift = ibldsp.utils.sync_timestamps(sequence_times[x], ts, linear=True)
             # Log any major drift or raise if too large
             if np.abs(drift) > DRIFT_THRESHOLD_PPM * 2 and x.size - ts.size > 100:
-                raise SyncBpodFpgaException(f'sync cluster f*ck: drift = {drift:.2f}, changepoint difference = {x.size - ts.size}')
-            elif drift > DRIFT_THRESHOLD_PPM:
-                _logger.warning('BPOD/FPGA synchronization shows values greater than %.2f ppm',
-                                DRIFT_THRESHOLD_PPM)
+                raise SyncBpodFpgaException(
+                    f'sync cluster f*ck: drift = {drift:.2f}, changepoint difference = {x.size - ts.size}')
+            elif np.abs(drift) > DRIFT_THRESHOLD_PPM:
+                _logger.warning('Frame synchronization shows values greater than %.2g ppm', DRIFT_THRESHOLD_PPM)
+            _logger.debug('Frame synchronization drift: %.2f ppm', drift)
 
             # Get the frame times in timeline time
             frame_times[:len(sequence_times), i] = fcn(sequence_times)
 
         # Trim down to length of repeat with most frames
-        frame_times = frame_times[:np.where(np.all(np.isnan(frame_times), axis=1))[0][0], :]
+        if np.any(empty := np.all(np.isnan(frame_times), axis=1)):
+            frame_times = frame_times[:np.where(empty)[0][0], :]
 
         if display:
             import matplotlib.pyplot as plt
@@ -191,16 +239,46 @@ class PassiveVideoTimeline(BehaviourTask):
             ax[0].title.set_text('frame2ttl')
             cmap = colormaps['plasma']
             for i, times in enumerate(frame_times.T):
+                # Plot the sync sequence and sync'd frame times
                 rgba = cmap(i / frame_times.shape[1])
                 ax[1].plot(times, sync_sequence[:len(times)], c=rgba, label=f'{i}')
+                # Plot the f2ttl values
+                idx = bpod_rep_starts[i]
+                start = bpod['times'][idx]
+                try:
+                    end = bpod['times'][idx + 1]
+                except IndexError:
+                    end = start + (rep['intervals_1'] - rep['intervals_0'])
+                mask = np.logical_and(f2ttl['times'] >= start, f2ttl['times'] < end)
+                squares(f2ttl['times'][mask], f2ttl['polarities'][mask],
+                        yrange=[0, 1], ax=ax[1], linestyle=':', color='k')
             ax[1].title.set_text('aligned sync square sequence')
             ax[1].set_yticks((0, 1))
             ax[1].set_yticklabels([-1, 1])
             plt.legend(markerfirst=False, title='repeat #', loc='upper right', facecolor='white')
+
+            # Check the sync sequence from the video
+            if video_file.exists():
+                observed = self.load_sync_sequence_from_video(video_file)
+                _, ax = plt.subplots(2, 1, sharex=True)
+                ax[0].title.set_text('generated sync square sequence')
+                ax[0].plot(sync_sequence[:observed.size])
+                ax[1].title.set_text('observed sync square sequence')
+                ax[1].plot(observed)
+
+                # resample the f2ttl sequence to the frame times
+                # tts = ts-ts[0]
+                # from scipy import interpolate
+                # interp = interpolate.interp1d(tts, pol, kind = "nearest")
+                # ttts = np.arange(0, tts[-1], 1/frame_rate)
+                # ax[2].plot(interp(ttts))
+                # squares(ts-ts[0], pol, ax=ax[2])
+
             plt.show()
 
         if save:
             filename = self.session_path.joinpath(self.output_collection, '_sp_video.times.npy')
+            np.save(filename, frame_times)
             out_files = [filename]
         else:
             out_files = []
