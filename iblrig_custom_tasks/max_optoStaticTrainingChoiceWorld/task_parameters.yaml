@@ -13,6 +13,7 @@
   - no_go
   - error
   - reward
+'CANNULA_NUMBER': 999
 'PROBABILITY_OPTO_STIM': 0.2  # probability of optogenetic stimulation
 'MAX_LASER_TIME': 6.0
 'ESTIMATED_LED_POWER_MW': 2.5

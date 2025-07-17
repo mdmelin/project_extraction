@@ -77,7 +77,7 @@ class PulsePalMixin(ABC):
     """
 
     def start_opto_hardware(self):
-        self.pulsepal_connection = PulsePalObject('COM13') # TODO: get port from hardware params
+        self.pulsepal_connection = PulsePalObject('COM16') # TODO: get port from hardware params
         log.warning('Connected to PulsePal')
         # TODO: get the calibration value for this specific cannula
         #super().start_hardware() # TODO: move this out
