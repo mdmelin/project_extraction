@@ -49,8 +49,8 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
         opto_ttl_states: list[str] = DEFAULTS['OPTO_TTL_STATES'],
         opto_stop_states: list[str] = DEFAULTS['OPTO_STOP_STATES'],
         max_laser_time: float = DEFAULTS['MAX_LASER_TIME'],
-        estimated_led_power_mW: float = DEFAULTS['ESTIMATED_LED_POWER_MW'],
-        cannula_number: int = DEFAULTS['CANNULA_NUMBER'],
+        target_led_power_mW: float = DEFAULTS['TARGET_LED_POWER_MW'],
+        cannula_suffix: str = DEFAULTS['CANNULA_SUFFIX'],
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -58,8 +58,8 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
         self.task_params['OPTO_STOP_STATES'] = opto_stop_states
         self.task_params['PROBABILITY_OPTO_STIM'] = probability_opto_stim
         self.task_params['MAX_LASER_TIME'] = max_laser_time
-        self.task_params['LED_POWER'] = estimated_led_power_mW
-        self.task_params['CANNULA_NUMBER'] = cannula_number
+        self.task_params['TARGET_LED_POWER_MW'] = target_led_power_mW
+        self.task_params['CANNULA_SUFFIX'] = cannula_suffix
         # generates the opto stimulation for each trial
         opto = np.random.choice(
                     [0, 1],
@@ -67,13 +67,13 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
                     size=NTRIALS_INIT,
                 ).astype(bool)
 
-        opto[0] = False
+        opto[0] = False # the first trial should not have opto stimulation
         self.trials_table['opto_stimulation'] = opto
         
         # get the calibration values for the LED
-        cannula_name = f'{kwargs["subject"]}_{self.task_params["CANNULA_NUMBER"]}'
-        vmax = float(cal.apply_calibration_curve(cannula_name, self.task_params['LED_POWER']))
-        log.warning(f'Using VMAX: {vmax}V for target LED power {self.task_params["LED_POWER"]}mW')
+        cannula_name = f'{kwargs["subject"]}_{self.task_params["CANNULA_SUFFIX"]}'
+        vmax = float(cal.apply_calibration_curve(cannula_name, self.task_params['TARGET_LED_POWER_MW']))
+        log.warning(f'Using VMAX: {vmax}V for target LED power {self.task_params["TARGET_LED_POWER_MW"]}mW')
         self.task_params['VMAX_LED'] = vmax
     
     def _instantiate_state_machine(self, trial_number=None):
@@ -84,7 +84,6 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
         """
         # PWM1 is the LED OUTPUT for port interface board
         # Input is PortIn1
-        # TODO: enable input port?
         log.warning('Instantiating state machine')
         is_opto_stimulation = self.trials_table.at[trial_number, 'opto_stimulation']
         if is_opto_stimulation:
@@ -187,11 +186,19 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
             help='Maximum laser duration in seconds',
         )
         parser.add_argument(
-            '--cannula_number',
-            option_strings=['--cannula_number'],
-            dest='cannula_number',
-            default=DEFAULTS['CANNULA_NUMBER'],
-            type=int,
+            '--cannula_suffix',
+            option_strings=['--cannula_suffix'],
+            dest='cannula_suffix',
+            default=DEFAULTS['CANNULA_SUFFIX'],
+            type=str,
+            help='cannula number used to pick the correct calibration curve',
+        )
+        parser.add_argument(
+            '--target_led_power_mW',
+            option_strings=['--target_led_power_mW'],
+            dest='target_led_power_mW',
+            default=DEFAULTS['TARGET_LED_POWER_MW'],
+            type=float,
             help='cannula number used to pick the correct calibration curve',
         )
 
