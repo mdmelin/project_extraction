@@ -45,6 +45,8 @@ class Session(ActiveChoiceWorldSession):
 
         is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
         self.extractor_tasks = ['TrialRegisterRaw','ChoiceWorldTrialsNidq'] if is_main_sync else ['ChoiceWorldTrials']
+        # Update experiment description which was created by superclass init
+        self.experiment_description['tasks'][-1][self.protocol_name]['extractors'] = self.extractor_tasks
 
         nc = len(contrast_set)
         assert len(probability_set) in [nc, 1], 'probability_set must be a scalar or have the same length as contrast_set'
