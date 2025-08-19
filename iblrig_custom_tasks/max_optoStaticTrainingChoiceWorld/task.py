@@ -40,7 +40,7 @@ with open(Path(__file__).parent.joinpath('task_parameters.yaml')) as f:
 
 class Session(StaticTrainingChoiceSession, PulsePalMixin):
     protocol_name = 'max_optoStaticTrainingChoiceWorld'
-    extractor_tasks = ['PulsePalTrialsBpod']
+    extractor_tasks = ['PulsePalTrialsBpod'] # TODO: check if main sync and update accordingly (see max_staticTrainingCW)
 
     def __init__(
         self,

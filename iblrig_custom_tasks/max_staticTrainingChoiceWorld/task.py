@@ -28,7 +28,6 @@ class Session(ActiveChoiceWorldSession):
     """
 
     protocol_name = 'max_staticTrainingChoiceWorld'
-    extractor_tasks = ['ChoiceWorldTrials']
 
     def __init__(
         self,
@@ -43,6 +42,10 @@ class Session(ActiveChoiceWorldSession):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+
+        is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
+        self.extractor_tasks = ['TrialRegisterRaw','ChoiceWorldTrialsNidq'] if is_main_sync else ['ChoiceWorldTrials']
+
         nc = len(contrast_set)
         assert len(probability_set) in [nc, 1], 'probability_set must be a scalar or have the same length as contrast_set'
         assert len(reward_set_ul) in [nc, 1], 'reward_set_ul must be a scalar or have the same length as contrast_set'
