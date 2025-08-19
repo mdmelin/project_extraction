@@ -4,7 +4,7 @@
 'POSITION_SET': [-35, -35, -35, -35, -35, 35, 35, 35, 35, 35]  # position set
 'STIM_GAIN': 4.0  # wheel to stimulus relationship
 'STIM_REVERSE': False
-#'DEBIAS': True  # Whether to use debiasing rule or not by repeating error trials  # todo
+'DEBIAS': False  # Whether to use debiasing rule or not by repeating error trials  # todo
 
 # Opto parameters
 'OPTO_TTL_STATES': # list of the state machine states where opto stim should be delivered

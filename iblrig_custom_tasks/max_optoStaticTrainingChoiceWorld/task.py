@@ -60,6 +60,7 @@ class Session(StaticTrainingChoiceSession, PulsePalMixin):
         self.task_params['MAX_LASER_TIME'] = max_laser_time
         self.task_params['TARGET_LED_POWER_MW'] = target_led_power_mW
         self.task_params['CANNULA_SUFFIX'] = cannula_suffix
+        self.task_params['PLOT_GROUPING_VARIABLE'] = 'opto_stimulation' # splits the online plotter into opto and non-opto trials
         # generates the opto stimulation for each trial
         opto = np.random.choice(
                     [0, 1],
