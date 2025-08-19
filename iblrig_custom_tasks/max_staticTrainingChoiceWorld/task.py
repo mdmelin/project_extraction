@@ -44,7 +44,7 @@ class Session(ActiveChoiceWorldSession):
         super().__init__(*args, **kwargs)
 
         is_main_sync = self.hardware_settings.get('MAIN_SYNC', False)
-        self.extractor_tasks = ['TrialRegisterRaw','ChoiceWorldTrialsNidq'] if is_main_sync else ['ChoiceWorldTrials']
+        self.extractor_tasks = ['ChoiceWorldTrials'] if is_main_sync else ['TrialRegisterRaw','ChoiceWorldTrialsNidq']
         # Update experiment description which was created by superclass init
         self.experiment_description['tasks'][-1][self.protocol_name]['extractors'] = self.extractor_tasks
 
